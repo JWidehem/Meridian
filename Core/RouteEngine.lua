@@ -27,6 +27,7 @@ local activeRoute = nil           -- route en cours
 local currentWaypointIndex = 0    -- index du waypoint cible
 local isNavigating = false        -- navigation GPS active
 local navFrame = nil              -- frame de l'update loop
+local resolvedMapID = nil         -- mapID vérifié qui fonctionne
 
 -- ============================================================
 -- Init
@@ -35,10 +36,45 @@ Meridian:RegisterCallback("INIT", function()
     if not Meridian.db.routes then
         Meridian.db.routes = {}
     end
-    if not Meridian.db.activeRouteName then
-        Meridian.db.activeRouteName = nil
-    end
+    Meridian.db.activeRouteName = nil
 end)
+
+-- ============================================================
+-- Résolution du mapID — trouver un mapID qui fonctionne
+-- pour positionner le joueur sur la carte de la route
+-- ============================================================
+local function ResolveMapID(routeMapID)
+    -- 1) Essayer le mapID de la route
+    if routeMapID then
+        local pos = C_Map.GetPlayerMapPosition(routeMapID, "player")
+        if pos then
+            return routeMapID
+        end
+    end
+
+    -- 2) Essayer le mapID actuel du joueur
+    local bestMap = C_Map.GetBestMapForUnit("player")
+    if bestMap then
+        local pos = C_Map.GetPlayerMapPosition(bestMap, "player")
+        if pos then
+            return bestMap
+        end
+    end
+
+    -- 3) Remonter la hiérarchie depuis le bestMap
+    if bestMap then
+        local info = C_Map.GetMapInfo(bestMap)
+        while info and info.parentMapID and info.parentMapID > 0 do
+            local pos = C_Map.GetPlayerMapPosition(info.parentMapID, "player")
+            if pos then
+                return info.parentMapID
+            end
+            info = C_Map.GetMapInfo(info.parentMapID)
+        end
+    end
+
+    return nil
+end
 
 -- ============================================================
 -- Route CRUD
@@ -88,27 +124,74 @@ end
 -- ============================================================
 function RouteEngine:StartNavigation(routeName)
     local route = Meridian.db.routes[routeName]
-    if not route or #route.waypoints == 0 then return false end
+    if not route then
+        Meridian:Msg("|cffff0000Route introuvable : " .. tostring(routeName) .. "|r")
+        return false
+    end
+    if not route.waypoints or #route.waypoints == 0 then
+        Meridian:Msg("|cffff0000Route vide (aucun waypoint)|r")
+        return false
+    end
 
+    -- Résoudre le mapID
+    local mapID = ResolveMapID(route.mapID)
+    if not mapID then
+        Meridian:Msg("|cffff0000Impossible de localiser le joueur sur la carte (mapID=" .. tostring(route.mapID) .. ")|r")
+        Meridian:Msg("Essayez d'ouvrir la carte de la zone d'abord.")
+        return false
+    end
+
+    -- Si le mapID résolu est différent, mettre à jour la route
+    if mapID ~= route.mapID then
+        Meridian:Msg("MapID corrigé : " .. tostring(route.mapID) .. " -> " .. tostring(mapID))
+        route.mapID = mapID
+    end
+
+    resolvedMapID = mapID
     activeRoute = route
-    currentWaypointIndex = 1
     isNavigating = true
     Meridian.db.activeRouteName = routeName
 
+    -- Démarrer au waypoint le plus proche du joueur
+    local pos = C_Map.GetPlayerMapPosition(resolvedMapID, "player")
+    if pos then
+        local px, py = pos.x * 100, pos.y * 100
+        local bestIdx = 1
+        local bestDist = 99999
+        for i, wp in ipairs(route.waypoints) do
+            local d = math_sqrt((wp.x - px) * (wp.x - px) + (wp.y - py) * (wp.y - py))
+            if d < bestDist then
+                bestDist = d
+                bestIdx = i
+            end
+        end
+        currentWaypointIndex = bestIdx
+    else
+        currentWaypointIndex = 1
+    end
+
     self:StartUpdateLoop()
     Meridian:FireCallback("NAV_STARTED", route)
-    Meridian:FireCallback("NAV_WAYPOINT_CHANGED", currentWaypointIndex, route.waypoints[1])
+    Meridian:FireCallback("NAV_WAYPOINT_CHANGED", currentWaypointIndex, route.waypoints[currentWaypointIndex])
+
+    Meridian:Msg("|cff2ecc71Navigation active|r : " .. route.name .. " (" .. #route.waypoints .. " pts, départ " .. currentWaypointIndex .. "/" .. #route.waypoints .. ")")
     return true
 end
 
 function RouteEngine:StopNavigation()
+    local wasNav = isNavigating
     isNavigating = false
     activeRoute = nil
     currentWaypointIndex = 0
+    resolvedMapID = nil
     Meridian.db.activeRouteName = nil
 
     self:StopUpdateLoop()
     Meridian:FireCallback("NAV_STOPPED")
+
+    if wasNav then
+        Meridian:Msg("|cffe74c3cNavigation arrêtée|r")
+    end
 end
 
 function RouteEngine:PauseNavigation()
@@ -177,14 +260,28 @@ function RouteEngine:GetTotalWaypoints()
     return #activeRoute.waypoints
 end
 
+function RouteEngine:GetResolvedMapID()
+    return resolvedMapID
+end
+
 -- ============================================================
 -- Player position helper
+-- Utilise le resolvedMapID pour rester cohérent avec la route
 -- ============================================================
-function RouteEngine:GetPlayerMapPos(forMapID)
-    local mapID = forMapID or C_Map.GetBestMapForUnit("player")
+function RouteEngine:GetPlayerMapPos()
+    local mapID = resolvedMapID or C_Map.GetBestMapForUnit("player")
     if not mapID then return nil end
     local pos = C_Map.GetPlayerMapPosition(mapID, "player")
-    if not pos then return nil end
+    if not pos then
+        -- Fallback : essayer le bestMap si resolvedMapID a échoué
+        if resolvedMapID then
+            mapID = C_Map.GetBestMapForUnit("player")
+            if mapID then
+                pos = C_Map.GetPlayerMapPosition(mapID, "player")
+            end
+        end
+        if not pos then return nil end
+    end
     return mapID, pos.x * 100, pos.y * 100
 end
 
@@ -192,22 +289,22 @@ end
 -- Distance helper (en % carte)
 -- ============================================================
 function RouteEngine:DistanceTo(wx, wy)
-    local routeMapID = activeRoute and activeRoute.mapID or nil
-    local mapID, px, py = self:GetPlayerMapPos(routeMapID)
+    local mapID, px, py = self:GetPlayerMapPos()
     if not px then return nil, nil end
     local dx = wx - px
     local dy = wy - py
     return math_sqrt(dx * dx + dy * dy), mapID
 end
 
--- Angle from player to waypoint (radians, 0 = north, clockwise)
+-- ============================================================
+-- Angle from player to waypoint (radians)
+-- Convention : 0 = nord, croissant sens horaire
+-- ============================================================
 function RouteEngine:AngleTo(wx, wy)
-    local routeMapID = activeRoute and activeRoute.mapID or nil
-    local mapID, px, py = self:GetPlayerMapPos(routeMapID)
+    local mapID, px, py = self:GetPlayerMapPos()
     if not px then return nil end
-    -- En coordonnées carte : Y augmente vers le bas
     local dx = wx - px
-    local dy = -(wy - py)
+    local dy = -(wy - py)  -- Y inversé (carte : Y bas = sud)
     return math.atan2(dx, dy)
 end
 
@@ -254,8 +351,7 @@ function RouteEngine:OnUpdate()
     -- Smart re-routing : si le joueur a dévié loin du waypoint actuel,
     -- vérifier s'il est proche d'un autre waypoint de la route
     if dist > ARRIVAL_RADIUS * 3 then
-        local routeMapID = activeRoute.mapID
-        local _, px, py = self:GetPlayerMapPos(routeMapID)
+        local _, px, py = self:GetPlayerMapPos()
         if px then
             for i, w in ipairs(wps) do
                 if i ~= currentWaypointIndex then
@@ -276,74 +372,4 @@ end
 -- ============================================================
 Meridian:RegisterCallback("RESET_ALL", function()
     RouteEngine:StopNavigation()
-end)
-
--- ============================================================
--- Recherche de route pour la zone actuelle
--- ============================================================
-function RouteEngine:FindRouteForZone(mapID)
-    if not mapID then return nil end
-    local bestName = nil
-    for name, route in pairs(Meridian.db.routes) do
-        if route.mapID == mapID then
-            if not bestName or route.filter == "ALL" then
-                bestName = name
-            end
-        end
-    end
-    if bestName then return bestName end
-    -- Remonter l'arbre des cartes parentes
-    local mapInfo = C_Map.GetMapInfo(mapID)
-    if mapInfo and mapInfo.parentMapID and mapInfo.parentMapID > 0 then
-        return self:FindRouteForZone(mapInfo.parentMapID)
-    end
-    return nil
-end
-
--- ============================================================
--- Démarrage automatique de la navigation
--- ============================================================
-function RouteEngine:AutoStart()
-    if self:IsNavigating() then return end
-    -- Reprendre une route précédemment active
-    local saved = Meridian.db.activeRouteName
-    if saved and Meridian.db.routes[saved] then
-        self:StartNavigation(saved)
-        return
-    end
-    -- Chercher une route pour la zone actuelle
-    local mapID = C_Map.GetBestMapForUnit("player")
-    if not mapID then return end
-    local routeName = self:FindRouteForZone(mapID)
-    if routeName then
-        self:StartNavigation(routeName)
-    end
-end
-
--- ============================================================
--- Évènements : auto-start au login, changement de zone
--- ============================================================
-local autoFrame = CreateFrame("Frame")
-autoFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-autoFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-autoFrame:SetScript("OnEvent", function(self, event)
-    if not Meridian.db then return end
-    if event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(1, function()
-            RouteEngine:AutoStart()
-        end)
-    elseif event == "ZONE_CHANGED_NEW_AREA" then
-        if RouteEngine:IsNavigating() then
-            local route = RouteEngine:GetActiveRoute()
-            if route then
-                local pos = C_Map.GetPlayerMapPosition(route.mapID, "player")
-                if not pos then
-                    RouteEngine:StopNavigation()
-                    RouteEngine:AutoStart()
-                end
-            end
-        else
-            RouteEngine:AutoStart()
-        end
-    end
 end)

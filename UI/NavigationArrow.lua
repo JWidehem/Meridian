@@ -94,18 +94,19 @@ function NavigationArrow:OnUpdate()
     local angle = RouteEngine:AngleTo(wp.x, wp.y)
     if not angle then return end
 
-    -- Soustraire le facing du joueur pour que la flèche soit relative
-    local facing = GetPlayerFacing and GetPlayerFacing() or 0
+    -- Facing du joueur
+    local facing = 0
+    if GetPlayerFacing then
+        local ok, f = pcall(GetPlayerFacing)
+        if ok and f then facing = f end
+    end
 
-    -- SetRotation : sens horaire sur l'écran (Y inversé dans WoW)
+    -- Rotation de la flèche relative au facing du joueur
     arrowFrame.arrow:SetRotation(angle - facing)
 
     -- Distance
     local dist = RouteEngine:DistanceTo(wp.x, wp.y)
     if dist then
-        -- Conversion approximative : 1% carte ≈ variable yards
-        -- En Eversong/Quel'Thalas typiquement ~50-70 yards par % carte
-        -- On affiche en % carte (plus fiable)
         if dist > 10 then
             arrowFrame.dist:SetText(format("%.0f", dist))
         else

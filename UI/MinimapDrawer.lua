@@ -61,20 +61,43 @@ local function GetMapDimensions(mapID)
         return cachedMapWidth, cachedMapHeight
     end
 
-    -- Try C_Map.GetWorldPosFromMapPos
-    if C_Map.GetWorldPosFromMapPos and CreateVector2D then
-        local _, topLeft = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(0, 0))
-        local _, bottomRight = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(1, 1))
-        if topLeft and bottomRight then
-            local w = math_abs(bottomRight.x - topLeft.x)
-            local h = math_abs(bottomRight.y - topLeft.y)
-            if w > 0 and h > 0 then
-                cachedMapWidth = w
-                cachedMapHeight = h
-                cachedMapID = mapID
-                return w, h
+    -- Try C_Map.GetWorldPosFromMapPos (multiple approaches)
+    local ok, w, h = pcall(function()
+        if not C_Map.GetWorldPosFromMapPos then return 0, 0 end
+
+        local topLeftPos, bottomRightPos
+
+        -- Method 1: CreateVector2D
+        if CreateVector2D then
+            local _, tl = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(0, 0))
+            local _, br = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(1, 1))
+            topLeftPos = tl
+            bottomRightPos = br
+        end
+
+        -- Method 2: table with x, y
+        if not topLeftPos then
+            local _, tl = C_Map.GetWorldPosFromMapPos(mapID, { x = 0, y = 0 })
+            local _, br = C_Map.GetWorldPosFromMapPos(mapID, { x = 1, y = 1 })
+            topLeftPos = tl
+            bottomRightPos = br
+        end
+
+        if topLeftPos and bottomRightPos then
+            local mw = math_abs(bottomRightPos.x - topLeftPos.x)
+            local mh = math_abs(bottomRightPos.y - topLeftPos.y)
+            if mw > 0 and mh > 0 then
+                return mw, mh
             end
         end
+        return 0, 0
+    end)
+
+    if ok and w and w > 0 then
+        cachedMapWidth = w
+        cachedMapHeight = h
+        cachedMapID = mapID
+        return w, h
     end
 
     -- Fallback : dimensions typiques d'une zone standard (~2500 x 1667 yards)
@@ -144,27 +167,48 @@ local function DrawRoute()
     if not wps or #wps == 0 then return end
 
     -- ── Calculs partagés (1× par frame) ──
-    -- Utiliser le mapID de la route pour cohérence des coordonnées
-    local mapID = route.mapID
+    -- Utiliser le resolvedMapID du RouteEngine pour cohérence
+    local mapID = RouteEngine:GetResolvedMapID()
+    if not mapID then
+        mapID = route.mapID
+    end
     if not mapID then return end
 
+    -- Obtenir la position du joueur sur cette carte
     local pos = C_Map.GetPlayerMapPosition(mapID, "player")
-    if not pos then return end
+    if not pos then
+        -- Fallback : essayer le bestMap
+        mapID = C_Map.GetBestMapForUnit("player")
+        if not mapID then return end
+        pos = C_Map.GetPlayerMapPosition(mapID, "player")
+        if not pos then return end
+    end
 
     local px, py = pos.x * 100, pos.y * 100
     GetMapDimensions(mapID)
 
     local minimapRadius = Minimap:GetWidth() / 2
-    local viewRadius = C_Minimap.GetViewRadius and C_Minimap.GetViewRadius() or 233
+    local viewRadius = 233  -- valeur par défaut
+    if C_Minimap and C_Minimap.GetViewRadius then
+        local ok, vr = pcall(C_Minimap.GetViewRadius)
+        if ok and vr and vr > 0 then
+            viewRadius = vr
+        end
+    end
     local scale = minimapRadius / viewRadius   -- pixels par yard
 
-    local facing = GetPlayerFacing and GetPlayerFacing() or 0
+    local facing = 0
+    if GetPlayerFacing then
+        local ok, f = pcall(GetPlayerFacing)
+        if ok and f then facing = f end
+    end
+
     local isRotating = false
-    local hasSetting = Minimap.GetSetting
-    if hasSetting and Minimap:GetSetting("rotateMinimap") then
-        isRotating = true
-    elseif GetCVar and GetCVar("rotateMinimap") == "1" then
-        isRotating = true
+    if GetCVar then
+        local ok, val = pcall(GetCVar, "rotateMinimap")
+        if ok and val == "1" then
+            isRotating = true
+        end
     end
 
     -- ── Pré-calculer les positions minimap de tous les waypoints ──

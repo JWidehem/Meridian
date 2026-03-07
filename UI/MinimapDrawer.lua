@@ -144,7 +144,8 @@ local function DrawRoute()
     if not wps or #wps == 0 then return end
 
     -- ── Calculs partagés (1× par frame) ──
-    local mapID = C_Map.GetBestMapForUnit("player")
+    -- Utiliser le mapID de la route pour cohérence des coordonnées
+    local mapID = route.mapID
     if not mapID then return end
 
     local pos = C_Map.GetPlayerMapPosition(mapID, "player")

@@ -180,8 +180,8 @@ end
 -- ============================================================
 -- Player position helper
 -- ============================================================
-function RouteEngine:GetPlayerMapPos()
-    local mapID = C_Map.GetBestMapForUnit("player")
+function RouteEngine:GetPlayerMapPos(forMapID)
+    local mapID = forMapID or C_Map.GetBestMapForUnit("player")
     if not mapID then return nil end
     local pos = C_Map.GetPlayerMapPosition(mapID, "player")
     if not pos then return nil end
@@ -192,7 +192,8 @@ end
 -- Distance helper (en % carte)
 -- ============================================================
 function RouteEngine:DistanceTo(wx, wy)
-    local mapID, px, py = self:GetPlayerMapPos()
+    local routeMapID = activeRoute and activeRoute.mapID or nil
+    local mapID, px, py = self:GetPlayerMapPos(routeMapID)
     if not px then return nil, nil end
     local dx = wx - px
     local dy = wy - py
@@ -201,7 +202,8 @@ end
 
 -- Angle from player to waypoint (radians, 0 = north, clockwise)
 function RouteEngine:AngleTo(wx, wy)
-    local mapID, px, py = self:GetPlayerMapPos()
+    local routeMapID = activeRoute and activeRoute.mapID or nil
+    local mapID, px, py = self:GetPlayerMapPos(routeMapID)
     if not px then return nil end
     -- En coordonnées carte : Y augmente vers le bas
     local dx = wx - px
@@ -233,7 +235,8 @@ end
 
 function RouteEngine:OnUpdate()
     if not isNavigating or not activeRoute then return end
-    local wp = activeRoute.waypoints[currentWaypointIndex]
+    local wps = activeRoute.waypoints
+    local wp = wps[currentWaypointIndex]
     if not wp then return end
 
     local dist = self:DistanceTo(wp.x, wp.y)
@@ -245,6 +248,26 @@ function RouteEngine:OnUpdate()
     -- Auto-advance si on est arrivé
     if dist < ARRIVAL_RADIUS then
         self:NextWaypoint()
+        return
+    end
+
+    -- Smart re-routing : si le joueur a dévié loin du waypoint actuel,
+    -- vérifier s'il est proche d'un autre waypoint de la route
+    if dist > ARRIVAL_RADIUS * 3 then
+        local routeMapID = activeRoute.mapID
+        local _, px, py = self:GetPlayerMapPos(routeMapID)
+        if px then
+            for i, w in ipairs(wps) do
+                if i ~= currentWaypointIndex then
+                    local d = math_sqrt((w.x - px) * (w.x - px) + (w.y - py) * (w.y - py))
+                    if d < ARRIVAL_RADIUS then
+                        currentWaypointIndex = (i % #wps) + 1
+                        Meridian:FireCallback("NAV_WAYPOINT_CHANGED", currentWaypointIndex, wps[currentWaypointIndex])
+                        return
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -253,4 +276,74 @@ end
 -- ============================================================
 Meridian:RegisterCallback("RESET_ALL", function()
     RouteEngine:StopNavigation()
+end)
+
+-- ============================================================
+-- Recherche de route pour la zone actuelle
+-- ============================================================
+function RouteEngine:FindRouteForZone(mapID)
+    if not mapID then return nil end
+    local bestName = nil
+    for name, route in pairs(Meridian.db.routes) do
+        if route.mapID == mapID then
+            if not bestName or route.filter == "ALL" then
+                bestName = name
+            end
+        end
+    end
+    if bestName then return bestName end
+    -- Remonter l'arbre des cartes parentes
+    local mapInfo = C_Map.GetMapInfo(mapID)
+    if mapInfo and mapInfo.parentMapID and mapInfo.parentMapID > 0 then
+        return self:FindRouteForZone(mapInfo.parentMapID)
+    end
+    return nil
+end
+
+-- ============================================================
+-- Démarrage automatique de la navigation
+-- ============================================================
+function RouteEngine:AutoStart()
+    if self:IsNavigating() then return end
+    -- Reprendre une route précédemment active
+    local saved = Meridian.db.activeRouteName
+    if saved and Meridian.db.routes[saved] then
+        self:StartNavigation(saved)
+        return
+    end
+    -- Chercher une route pour la zone actuelle
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then return end
+    local routeName = self:FindRouteForZone(mapID)
+    if routeName then
+        self:StartNavigation(routeName)
+    end
+end
+
+-- ============================================================
+-- Évènements : auto-start au login, changement de zone
+-- ============================================================
+local autoFrame = CreateFrame("Frame")
+autoFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+autoFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+autoFrame:SetScript("OnEvent", function(self, event)
+    if not Meridian.db then return end
+    if event == "PLAYER_ENTERING_WORLD" then
+        C_Timer.After(1, function()
+            RouteEngine:AutoStart()
+        end)
+    elseif event == "ZONE_CHANGED_NEW_AREA" then
+        if RouteEngine:IsNavigating() then
+            local route = RouteEngine:GetActiveRoute()
+            if route then
+                local pos = C_Map.GetPlayerMapPosition(route.mapID, "player")
+                if not pos then
+                    RouteEngine:StopNavigation()
+                    RouteEngine:AutoStart()
+                end
+            end
+        else
+            RouteEngine:AutoStart()
+        end
+    end
 end)

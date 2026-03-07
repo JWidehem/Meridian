@@ -25,6 +25,7 @@ ignore:
   - .github
   - .vscode
   - agent-context
+  - scripts
   - "*.md"
   - .gitignore
   - .luarc.json

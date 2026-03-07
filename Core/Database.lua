@@ -155,7 +155,12 @@ function Database:GetKnownResourcesByType(resourceType)
     local result = {}
     for itemID, info in pairs(self.db.knownResources) do
         if info.type == resourceType then
-            result[itemID] = info
+            result[#result + 1] = {
+                itemID     = itemID,
+                name       = info.name,
+                count      = self:GetResourceCount(itemID),
+                colorIndex = info.colorIndex,
+            }
         end
     end
     return result

@@ -96,11 +96,9 @@ function NavigationArrow:OnUpdate()
 
     -- Soustraire le facing du joueur pour que la flèche soit relative
     local facing = GetPlayerFacing and GetPlayerFacing() or 0
-    local relAngle = angle - facing
 
-    -- Rotation de la texture (WoW textures: 0 = haut, tourne clockwise)
-    -- SetRotation prend des radians, sens anti-horaire
-    arrowFrame.arrow:SetRotation(-relAngle)
+    -- SetRotation : sens horaire sur l'écran (Y inversé dans WoW)
+    arrowFrame.arrow:SetRotation(angle - facing)
 
     -- Distance
     local dist = RouteEngine:DistanceTo(wp.x, wp.y)

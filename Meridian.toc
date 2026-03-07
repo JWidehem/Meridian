@@ -1,0 +1,39 @@
+## Interface: 120001
+## Title: Meridian
+## Title-frFR: Meridian
+## Notes: Lightweight gathering node tracker for farming route optimization.
+## Notes-frFR: Tracker léger de nœuds de récolte pour l'optimisation de routes de farming.
+## Author: JWidehem
+## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Misc_Map_01
+## SavedVariables: MeridianDB
+## OptionalDeps: Ace3, LibStub, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0
+## X-Website: https://github.com/JWidehem/Meridian
+## X-Curse-Project-ID: 000000
+## X-Date: @project-date-iso@
+## X-Revision: @project-abbreviated-hash@
+
+# Libraries
+libs\LibStub\LibStub.lua
+libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+libs\AceAddon-3.0\AceAddon-3.0.xml
+libs\AceConsole-3.0\AceConsole-3.0.xml
+libs\AceEvent-3.0\AceEvent-3.0.xml
+libs\AceDB-3.0\AceDB-3.0.xml
+libs\AceTimer-3.0\AceTimer-3.0.xml
+libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+
+# Locales
+locales\enUS.lua
+locales\frFR.lua
+
+# Core
+Core\Meridian.lua
+Core\Database.lua
+Core\Tracker.lua
+Core\Export.lua
+
+# UI
+UI\MinimapIcon.lua
+UI\StatsPanel.lua

@@ -1,106 +1,132 @@
 -- ============================================================
--- Meridian — Main Addon Init
--- Lightweight gathering node tracker for farming route optimization
+-- Meridian — Main Addon (100% Native, Zero Dependencies)
+-- Lightweight gathering node tracker
 -- ============================================================
 local addonName, ns = ...
 
-local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
-ns.L = L
+local L = ns.L
 
--- Couleur du préfixe chat
+-- ============================================================
+-- Addon table
+-- ============================================================
+local Meridian = {}
+ns.addon = Meridian
+
+-- Chat prefix
 local CHAT_PREFIX = "|cff3498db[Meridian]|r "
 
--- ============================================================
--- Création de l'addon AceAddon
--- ============================================================
-local Meridian = LibStub("AceAddon-3.0"):NewAddon(
-    addonName,
-    "AceConsole-3.0",
-    "AceEvent-3.0",
-    "AceTimer-3.0"
-)
-ns.addon = Meridian
-Meridian.ns = ns
-
--- ============================================================
--- Defaults AceDB
--- ============================================================
-local defaults = {
-    profile = {
-        enabled = true,
-        tracking = {
-            trackHerbs = true,
-            trackOres = true,
-            chatMessages = true,
-        },
-        minimap = {
-            hide = false,
-        },
-    },
-    global = {
-        -- Nodes par zone : [mapID] = { {node}, {node}, ... }
-        nodes = {},
-        -- Ressources auto-découvertes : [itemID] = { type, name, firstSeen, colorIndex }
-        knownResources = {},
-        -- Sorts de récolte appris dynamiquement : [spellID] = "HERB"|"ORE"
-        learnedSpells = {},
-        -- Prochain index de couleur à attribuer
-        nextColorIndex = 1,
-    },
-}
-
--- ============================================================
--- Lifecycle
--- ============================================================
-function Meridian:OnInitialize()
-    self.db = LibStub("AceDB-3.0"):New("MeridianDB", defaults, true)
-
-    self:RegisterChatCommand("meridian", "HandleCommand")
-    self:RegisterChatCommand("mer", "HandleCommand")
-end
-
-function Meridian:OnEnable()
-    self:Msg(L["ADDON_LOADED"])
-end
-
-function Meridian:OnDisable()
-end
-
--- ============================================================
--- Message helper (préfixé [Meridian])
--- ============================================================
 function Meridian:Msg(text)
     DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. text)
 end
 
 -- ============================================================
--- Commandes slash
+-- Simple callback system (replaces AceEvent messages)
 -- ============================================================
-function Meridian:HandleCommand(input)
-    local cmd = (input or ""):lower():trim()
+local callbacks = {}
+
+function Meridian:RegisterCallback(event, func)
+    if not callbacks[event] then callbacks[event] = {} end
+    callbacks[event][#callbacks[event] + 1] = func
+end
+
+function Meridian:FireCallback(event, ...)
+    if not callbacks[event] then return end
+    for _, func in ipairs(callbacks[event]) do
+        func(...)
+    end
+end
+
+-- ============================================================
+-- Defaults for SavedVariables
+-- ============================================================
+local defaults = {
+    enabled = true,
+    tracking = {
+        trackHerbs = true,
+        trackOres = true,
+        chatMessages = true,
+    },
+    minimap = {
+        hide = false,
+        angle = 220,
+    },
+    -- Data
+    nodes = {},
+    knownResources = {},
+    learnedSpells = {},
+    nextColorIndex = 1,
+}
+
+-- Deep copy a table
+local function DeepCopy(src)
+    if type(src) ~= "table" then return src end
+    local copy = {}
+    for k, v in pairs(src) do
+        copy[k] = DeepCopy(v)
+    end
+    return copy
+end
+
+-- Merge defaults into saved (only fills missing keys)
+local function MergeDefaults(saved, defs)
+    for k, v in pairs(defs) do
+        if saved[k] == nil then
+            saved[k] = DeepCopy(v)
+        elseif type(v) == "table" and type(saved[k]) == "table" then
+            MergeDefaults(saved[k], v)
+        end
+    end
+end
+
+-- ============================================================
+-- Main event frame
+-- ============================================================
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("ADDON_LOADED")
+
+eventFrame:SetScript("OnEvent", function(self, event, arg1)
+    if event == "ADDON_LOADED" and arg1 == addonName then
+        -- Init SavedVariables
+        if not MeridianDB then
+            MeridianDB = DeepCopy(defaults)
+        else
+            MergeDefaults(MeridianDB, defaults)
+        end
+        Meridian.db = MeridianDB
+
+        -- Init modules
+        Meridian:FireCallback("INIT")
+
+        -- Done
+        Meridian:Msg(L.ADDON_LOADED)
+
+        self:UnregisterEvent("ADDON_LOADED")
+    end
+end)
+
+-- ============================================================
+-- Slash commands (native)
+-- ============================================================
+SLASH_MERIDIAN1 = "/meridian"
+SLASH_MERIDIAN2 = "/mer"
+
+SlashCmdList["MERIDIAN"] = function(input)
+    local cmd = (input or ""):lower():match("^%s*(.-)%s*$")
 
     if cmd == "" then
-        -- Toggle la fenêtre principale
-        local StatsPanel = self:GetModule("StatsPanel", true)
-        if StatsPanel then
-            StatsPanel:Toggle()
-        end
+        Meridian:FireCallback("TOGGLE_PANEL")
 
     elseif cmd == "export" then
-        local Export = self:GetModule("Export", true)
-        if Export then Export:ExportAll() end
+        Meridian:FireCallback("EXPORT_ALL")
 
     elseif cmd == "reset confirm" then
-        local Database = self:GetModule("Database", true)
-        if Database then
-            Database:ResetAll()
-            self:Msg(L["CMD_RESET_DONE"])
-        end
+        Meridian:FireCallback("RESET_ALL")
+        Meridian:Msg(L.CMD_RESET_DONE)
 
     elseif cmd == "reset" then
-        self:Msg(L["CMD_RESET_CONFIRM"])
+        Meridian:Msg(L.CMD_RESET_CONFIRM)
 
     else
-        self:Msg(L["CMD_HELP"])
+        Meridian:Msg(L.CMD_HELP)
     end
 end

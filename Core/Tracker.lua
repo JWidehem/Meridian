@@ -1,15 +1,18 @@
 -- ============================================================
--- Meridian — Tracker Module
--- Détection de récolte via approche "sandwich" :
---   UNIT_SPELLCAST_SUCCEEDED → CHAT_MSG_LOOT
--- Auto-apprentissage des sorts de récolte inconnus
+-- Meridian — Tracker Module (100% Native)
+-- Detection de recolte via approche "sandwich" :
+--   UNIT_SPELLCAST_SUCCEEDED -> CHAT_MSG_LOOT
+-- Auto-apprentissage des sorts de recolte inconnus
 -- ============================================================
 local addonName, ns = ...
-local Meridian = LibStub("AceAddon-3.0"):GetAddon(addonName)
-local Tracker = Meridian:NewModule("Tracker", "AceEvent-3.0")
+local Meridian = ns.addon
+local Database = ns.Database
 local L = ns.L
 
--- Cache de fonctions globales
+local Tracker = {}
+ns.Tracker = Tracker
+
+-- Cache
 local GetTime = GetTime
 local time = time
 local tonumber = tonumber
@@ -17,8 +20,7 @@ local format = string.format
 local math_floor = math.floor
 
 -- ============================================================
--- Sorts de récolte connus (seed list — IDs stables)
--- Le système d'apprentissage complète cette liste dynamiquement
+-- Sorts de recolte connus (seed list)
 -- ============================================================
 local GATHER_SPELLS = {
     -- Herb Gathering
@@ -53,30 +55,17 @@ local GATHER_SPELLS = {
     [423399] = "ORE",
 }
 
--- Fenêtre temporelle pour l'apprentissage automatique (secondes)
 local LEARN_WINDOW = 5
--- Timeout pour annuler un pending gather (secondes)
 local PENDING_TIMEOUT = 8
 
 -- ============================================================
--- Lifecycle
+-- State
 -- ============================================================
-function Tracker:OnEnable()
-    self.pendingGather = nil
-    self.lastSpellCast = nil
-
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-    self:RegisterEvent("CHAT_MSG_LOOT")
-end
-
-function Tracker:OnDisable()
-    self:UnregisterAllEvents()
-    self.pendingGather = nil
-    self.lastSpellCast = nil
-end
+local pendingGather = nil
+local lastSpellCast = nil
 
 -- ============================================================
--- Coordonnées du joueur
+-- Coordonnees du joueur
 -- ============================================================
 function Tracker:GetPlayerCoords()
     local mapID = C_Map.GetBestMapForUnit("player")
@@ -97,24 +86,21 @@ function Tracker:GetPlayerCoords()
 end
 
 -- ============================================================
--- Classification d'un item (herb/ore) via classID/subClassID
+-- Classification item (herb/ore) via classID
 -- ============================================================
 function Tracker:ClassifyItem(itemID)
     local classID, subClassID
 
-    -- API moderne (C_Item namespace)
     if C_Item and C_Item.GetItemInfoInstant then
         local result = C_Item.GetItemInfoInstant(itemID)
         if type(result) == "table" then
             classID = result.classID
             subClassID = result.subClassID
         elseif result then
-            -- Si ça retourne des valeurs multiples (legacy behavior)
             _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemID)
         end
     end
 
-    -- Fallback API globale
     if not classID and GetItemInfoInstant then
         _, _, _, _, _, classID, subClassID = GetItemInfoInstant(itemID)
     end
@@ -128,10 +114,9 @@ function Tracker:ClassifyItem(itemID)
 end
 
 -- ============================================================
--- Extraction d'un item depuis un message de loot
+-- Extraction item depuis message de loot
 -- ============================================================
 function Tracker:ExtractItemFromLoot(msg)
-    -- Format WoW : "... |cffQUALITY|Hitem:ITEMID:...|h[Nom]|h|r ..."
     local itemID = tonumber(msg:match("|Hitem:(%d+):"))
     if not itemID then return nil, nil end
 
@@ -140,62 +125,95 @@ function Tracker:ExtractItemFromLoot(msg)
 end
 
 -- ============================================================
--- Event : Sort lancé avec succès
+-- Notification de recolte
 -- ============================================================
-function Tracker:UNIT_SPELLCAST_SUCCEEDED(event, unit, castGUID, spellID)
+function Tracker:NotifyGather(node, isNew)
+    if not Meridian.db.tracking.chatMessages then return end
+
+    local colorHex = node.resourceType == "HERB" and "2ecc71" or "f39c12"
+    local total = Database:GetResourceCount(node.itemID)
+
+    if isNew then
+        Meridian:Msg(format(
+            "|cff00ff00+|r " .. L.NEW_RESOURCE,
+            node.itemName, node.itemID
+        ))
+    end
+
+    Meridian:Msg(format(
+        "|cff%s* " .. L.NODE_RECORDED .. "|r",
+        colorHex, node.itemName, node.x, node.y, total
+    ))
+end
+
+-- ============================================================
+-- Event frame
+-- ============================================================
+local eventFrame = CreateFrame("Frame")
+
+Meridian:RegisterCallback("INIT", function()
+    eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    eventFrame:RegisterEvent("CHAT_MSG_LOOT")
+end)
+
+eventFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "UNIT_SPELLCAST_SUCCEEDED" then
+        Tracker:OnSpellCastSucceeded(...)
+    elseif event == "CHAT_MSG_LOOT" then
+        Tracker:OnChatMsgLoot(...)
+    end
+end)
+
+-- ============================================================
+-- UNIT_SPELLCAST_SUCCEEDED
+-- ============================================================
+function Tracker:OnSpellCastSucceeded(unit, castGUID, spellID)
     if unit ~= "player" then return end
 
     local coords = self:GetPlayerCoords()
     if not coords then return end
 
-    -- Toujours mémoriser le dernier sort (pour l'apprentissage)
-    self.lastSpellCast = {
+    lastSpellCast = {
         spellID = spellID,
         time    = GetTime(),
         coords  = coords,
     }
 
-    -- Vérifier si c'est un sort de récolte connu
-    local learnedSpells = Meridian.db.global.learnedSpells
+    local learnedSpells = Meridian.db.learnedSpells
     local resourceType = GATHER_SPELLS[spellID] or learnedSpells[spellID]
 
     if resourceType then
-        -- Sort de récolte reconnu → préparer l'enregistrement
-        self.pendingGather = {
+        local castTime = GetTime()
+        pendingGather = {
             resourceType = resourceType,
             coords       = coords,
-            time         = GetTime(),
+            time         = castTime,
         }
 
-        -- Auto-annuler si pas de loot dans PENDING_TIMEOUT secondes
         C_Timer.After(PENDING_TIMEOUT, function()
-            if self.pendingGather and self.pendingGather.time == self.lastSpellCast.time then
-                self.pendingGather = nil
+            if pendingGather and pendingGather.time == castTime then
+                pendingGather = nil
             end
         end)
     end
 end
 
 -- ============================================================
--- Event : Loot reçu
+-- CHAT_MSG_LOOT
 -- ============================================================
-function Tracker:CHAT_MSG_LOOT(event, msg, ...)
-    local settings = Meridian.db.profile.tracking
-    if not settings or not Meridian.db.profile.enabled then return end
+function Tracker:OnChatMsgLoot(msg, ...)
+    local settings = Meridian.db.tracking
+    if not settings or not Meridian.db.enabled then return end
 
     local itemID, itemName = self:ExtractItemFromLoot(msg)
     if not itemID then return end
 
-    local Database = Meridian:GetModule("Database")
+    if pendingGather then
+        local resourceType = pendingGather.resourceType
 
-    if self.pendingGather then
-        -- Sort de récolte reconnu → enregistrer directement
-        local resourceType = self.pendingGather.resourceType
-
-        -- Vérifier que le tracking est activé pour ce type
         if (resourceType == "HERB" and not settings.trackHerbs)
         or (resourceType == "ORE" and not settings.trackOres) then
-            self.pendingGather = nil
+            pendingGather = nil
             return
         end
 
@@ -203,46 +221,42 @@ function Tracker:CHAT_MSG_LOOT(event, msg, ...)
             itemID       = itemID,
             itemName     = itemName,
             resourceType = resourceType,
-            mapID        = self.pendingGather.coords.mapID,
-            zoneName     = self.pendingGather.coords.zoneName,
-            subZone      = self.pendingGather.coords.subZone,
-            x            = self.pendingGather.coords.x,
-            y            = self.pendingGather.coords.y,
+            mapID        = pendingGather.coords.mapID,
+            zoneName     = pendingGather.coords.zoneName,
+            subZone      = pendingGather.coords.subZone,
+            x            = pendingGather.coords.x,
+            y            = pendingGather.coords.y,
             timestamp    = time(),
         })
 
-        self.pendingGather = nil
+        pendingGather = nil
 
         if node then
             self:NotifyGather(node, isNew)
         end
 
-    elseif self.lastSpellCast and (GetTime() - self.lastSpellCast.time) < LEARN_WINDOW then
-        -- Sort inconnu mais loot d'un herb/ore → apprentissage
+    elseif lastSpellCast and (GetTime() - lastSpellCast.time) < LEARN_WINDOW then
         local resourceType = self:ClassifyItem(itemID)
         if not resourceType then return end
 
-        -- Vérifier le tracking
         if (resourceType == "HERB" and not settings.trackHerbs)
         or (resourceType == "ORE" and not settings.trackOres) then
             return
         end
 
-        -- Apprendre le sort
-        local spellID = self.lastSpellCast.spellID
-        Meridian.db.global.learnedSpells[spellID] = resourceType
-        Meridian:Msg(format(L["SPELL_LEARNED"], spellID))
+        local spellID = lastSpellCast.spellID
+        Meridian.db.learnedSpells[spellID] = resourceType
+        Meridian:Msg(format(L.SPELL_LEARNED, spellID))
 
-        -- Enregistrer le node
         local node, isNew = Database:RecordNode({
             itemID       = itemID,
             itemName     = itemName,
             resourceType = resourceType,
-            mapID        = self.lastSpellCast.coords.mapID,
-            zoneName     = self.lastSpellCast.coords.zoneName,
-            subZone      = self.lastSpellCast.coords.subZone,
-            x            = self.lastSpellCast.coords.x,
-            y            = self.lastSpellCast.coords.y,
+            mapID        = lastSpellCast.coords.mapID,
+            zoneName     = lastSpellCast.coords.zoneName,
+            subZone      = lastSpellCast.coords.subZone,
+            x            = lastSpellCast.coords.x,
+            y            = lastSpellCast.coords.y,
             timestamp    = time(),
         })
 
@@ -250,26 +264,4 @@ function Tracker:CHAT_MSG_LOOT(event, msg, ...)
             self:NotifyGather(node, isNew)
         end
     end
-end
-
--- ============================================================
--- Notification de récolte (chat + feedback)
--- ============================================================
-function Tracker:NotifyGather(node, isNew)
-    if not Meridian.db.profile.tracking.chatMessages then return end
-
-    local colorHex = node.resourceType == "HERB" and "2ecc71" or "f39c12"
-    local total = Meridian:GetModule("Database"):GetResourceCount(node.itemID)
-
-    if isNew then
-        Meridian:Msg(format(
-            "|cff00ff00\226\156\166|r " .. L["NEW_RESOURCE"],
-            node.itemName, node.itemID
-        ))
-    end
-
-    Meridian:Msg(format(
-        "|cff%s\226\128\162 " .. L["NODE_RECORDED"] .. "|r",
-        colorHex, node.itemName, node.x, node.y, total
-    ))
 end

@@ -1,274 +1,258 @@
 -- ============================================================
--- Meridian — Export Module
--- Génération JSON/CSV et fenêtre de copie
+-- Meridian — Export Module (100% Native)
+-- Serialisation JSON personnalisee + fenetre de copie
 -- ============================================================
 local addonName, ns = ...
-local Meridian = LibStub("AceAddon-3.0"):GetAddon(addonName)
-local Export = Meridian:NewModule("Export")
+local Meridian = ns.addon
+local Database = ns.Database
 local L = ns.L
 
--- Cache
+local Export = {}
+ns.Export = Export
+
 local format = string.format
-local tconcat = table.concat
-local tinsert = table.insert
-local pairs = pairs
-local ipairs = ipairs
-local type = type
-local tostring = tostring
-local date = date
 
 -- ============================================================
--- Sérialiseur JSON léger (structure connue, pas générique)
+-- JSON Serializer
 -- ============================================================
-local function EscapeJSON(s)
-    s = s:gsub('\\', '\\\\')
-    s = s:gsub('"', '\\"')
-    s = s:gsub('\n', '\\n')
-    s = s:gsub('\r', '\\r')
-    s = s:gsub('\t', '\\t')
-    return s
+local function EscapeJSON(str)
+    if type(str) ~= "string" then return tostring(str) end
+    str = str:gsub('\\', '\\\\')
+    str = str:gsub('"', '\\"')
+    str = str:gsub('\n', '\\n')
+    str = str:gsub('\r', '\\r')
+    str = str:gsub('\t', '\\t')
+    return str
 end
 
-local SerializeValue -- forward declaration
+local SerializeValue, SerializeTable
 
-local function SerializeTable(t, indent)
+SerializeValue = function(val, indent)
+    local t = type(val)
+    if t == "string" then
+        return '"' .. EscapeJSON(val) .. '"'
+    elseif t == "number" then
+        if val == math.floor(val) then
+            return tostring(math.floor(val))
+        end
+        return format("%.4f", val)
+    elseif t == "boolean" then
+        return val and "true" or "false"
+    elseif t == "table" then
+        return SerializeTable(val, indent)
+    else
+        return "null"
+    end
+end
+
+SerializeTable = function(tbl, indent)
     indent = indent or 0
-    local prefix = string.rep("  ", indent + 1)
-    local closing = string.rep("  ", indent)
-    local parts = {}
+    local pad = string.rep("  ", indent)
+    local padInner = string.rep("  ", indent + 1)
 
-    -- Déterminer si c'est un array (clés numériques consécutives)
+    -- Array detection : consecutive integer keys starting at 1
     local isArray = true
     local maxN = 0
-    for k in pairs(t) do
-        if type(k) == "number" then
+    for k in pairs(tbl) do
+        if type(k) == "number" and k == math.floor(k) and k > 0 then
             if k > maxN then maxN = k end
         else
             isArray = false
             break
         end
     end
-    if isArray and maxN ~= #t then isArray = false end
+    if maxN == 0 then isArray = false end
 
+    local parts = {}
     if isArray then
-        for i = 1, #t do
-            parts[#parts + 1] = prefix .. SerializeValue(t[i], indent + 1)
+        for i = 1, maxN do
+            parts[#parts + 1] = padInner .. SerializeValue(tbl[i], indent + 1)
         end
-        if #parts == 0 then return "[]" end
-        return "[\n" .. tconcat(parts, ",\n") .. "\n" .. closing .. "]"
+        return "[\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "]"
     else
-        -- Collecter et trier les clés pour un output déterministe
         local keys = {}
-        for k in pairs(t) do
+        for k in pairs(tbl) do
             keys[#keys + 1] = k
         end
-        table.sort(keys, function(a, b)
-            return tostring(a) < tostring(b)
-        end)
-
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
         for _, k in ipairs(keys) do
-            local keyStr = '"' .. EscapeJSON(tostring(k)) .. '"'
-            parts[#parts + 1] = prefix .. keyStr .. ": " .. SerializeValue(t[k], indent + 1)
+            parts[#parts + 1] = padInner .. '"' .. EscapeJSON(tostring(k)) .. '": '
+                .. SerializeValue(tbl[k], indent + 1)
         end
-        if #parts == 0 then return "{}" end
-        return "{\n" .. tconcat(parts, ",\n") .. "\n" .. closing .. "}"
+        return "{\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "}"
     end
 end
 
-SerializeValue = function(v, indent)
-    local t = type(v)
-    if t == "string" then
-        return '"' .. EscapeJSON(v) .. '"'
-    elseif t == "number" then
-        -- Éviter la notation scientifique pour les coordonnées
-        if v == math.floor(v) then
-            return tostring(v)
-        end
-        return format("%.2f", v)
-    elseif t == "boolean" then
-        return v and "true" or "false"
-    elseif t == "nil" then
-        return "null"
-    elseif t == "table" then
-        return SerializeTable(v, indent)
-    end
-    return '"[unsupported]"'
+function Export:ToJSON(data)
+    return SerializeValue(data, 0)
 end
 
 -- ============================================================
--- Construction du payload d'export
+-- AI Prompt Template
 -- ============================================================
-function Export:BuildExportPayload(mapID)
-    local Database = Meridian:GetModule("Database")
-    local zoneData = Database:GetExportData(mapID)
+local AI_PROMPT_TEMPLATE = [[
+## Meridian — Gathering Data Export
+### Addon: %s | Date: %s | Character: %s - %s
 
-    -- Construire les zones avec nodes nettoyés (sans données internes)
-    local zones = {}
-    for zoneKey, zone in pairs(zoneData) do
-        local cleanNodes = {}
-        for i, node in ipairs(zone.nodes) do
-            cleanNodes[#cleanNodes + 1] = {
-                id             = i,
-                item_id        = node.itemID,
-                item_name      = node.itemName,
-                resource_type  = node.resourceType,
-                x              = node.x,
-                y              = node.y,
-                sub_zone       = node.subZone,
-                timestamp      = node.timestamp,
-            }
-        end
+You are an AI assistant specialized in World of Warcraft route optimization.
+Below is a JSON dataset of gathering nodes collected by the Meridian addon.
 
-        zones[zoneKey] = {
-            zone_name   = zone.zone_name,
-            map_id      = zone.map_id,
-            nodes       = cleanNodes,
-            summary     = zone.summary,
-        }
-    end
+Each node contains:
+- **itemID** / **itemName**: the resource gathered
+- **resourceType**: "HERB" or "ORE"
+- **mapID** / **zoneName** / **subZone**: location identifiers
+- **x**, **y**: coordinates (0-100 scale)
+- **count**: number of times gathered at this location
+- **firstSeen** / **lastSeen**: unix timestamps
 
-    local payload = {
-        export_version = "1.0",
-        addon_version  = C_AddOns and C_AddOns.GetAddOnMetadata(addonName, "Version") or "dev",
-        export_date    = date("!%Y-%m-%dT%H:%M:%SZ"),
-        wow_patch      = "12.0.1",
-        total_nodes    = Database:GetTotalNodeCount(),
-        zones          = zones,
-    }
+### Instructions:
+1. Analyze node density and distribution per zone
+2. Identify clusters (nodes within 2%% distance)
+3. Suggest an optimal circular route minimizing travel distance
+4. Highlight high-yield zones and rare resources
+5. Estimate route completion time based on mount speed
 
-    return payload
-end
-
--- ============================================================
--- Export complet (toutes zones) avec prompt IA
--- ============================================================
-function Export:ExportAll()
-    local Database = Meridian:GetModule("Database")
-    if Database:GetTotalNodeCount() == 0 then
-        Meridian:Msg(L["NO_DATA"])
-        return
-    end
-
-    local payload = self:BuildExportPayload(nil)
-    local json = SerializeValue(payload, 0)
-
-    local prompt = [[
---- MERIDIAN EXPORT ---
-Voici mes données de farming WoW au format JSON.
-
-Génère une route optimisée de farming en tenant compte de :
-- La densité de nodes par zone de la carte
-- Un parcours en boucle fermée (départ = arrivée)
-- L'évitement des zones sans nodes
-- La priorité aux clusters de nodes denses
-
-Retourne la route sous forme d'une liste ordonnée de waypoints :
-{ "order": N, "x": XX.XX, "y": XX.XX, "note": "..." }
-
---- DONNÉES ---
+### Data:
+```json
+%s
+```
 ]]
 
-    self:ShowExportFrame(prompt .. json)
-end
-
 -- ============================================================
--- Export d'une seule zone
+-- Build export string
 -- ============================================================
-function Export:ExportZone(mapID)
-    if not mapID then
+function Export:BuildExport(zoneOnly)
+    local mapID = nil
+    if zoneOnly then
         mapID = C_Map.GetBestMapForUnit("player")
     end
-    if not mapID then
-        Meridian:Msg(L["NO_DATA"])
-        return
+    local data = Database:GetExportData(mapID)
+    if not data or not next(data) then
+        return nil, L.NO_DATA
     end
 
-    local Database = Meridian:GetModule("Database")
-    local zoneNodes = Database:GetNodesByZone(mapID)
-    if #zoneNodes == 0 then
-        Meridian:Msg(L["NO_DATA"])
-        return
-    end
+    local json = self:ToJSON(data)
+    local playerName = UnitName("player") or "Unknown"
+    local realmName = GetRealmName() or "Unknown"
+    local dateStr = date("%Y-%m-%d %H:%M:%S")
 
-    local payload = self:BuildExportPayload(mapID)
-    local json = SerializeValue(payload, 0)
-    self:ShowExportFrame(json)
+    local output = format(AI_PROMPT_TEMPLATE,
+        addonName, dateStr, playerName, realmName, json)
+
+    return output
 end
 
 -- ============================================================
--- Fenêtre d'export (EditBox copiable)
+-- Export Frame (native ScrollFrame + EditBox pour copier)
 -- ============================================================
-function Export:ShowExportFrame(content)
-    if not self.exportFrame then
-        self:CreateExportFrame()
+local exportFrame = nil
+
+function Export:ShowExportWindow(text)
+    if not exportFrame then
+        exportFrame = CreateFrame("Frame", "MeridianExportFrame", UIParent, "BackdropTemplate")
+        exportFrame:SetSize(700, 500)
+        exportFrame:SetPoint("CENTER")
+        exportFrame:SetFrameStrata("DIALOG")
+        exportFrame:SetMovable(true)
+        exportFrame:EnableMouse(true)
+        exportFrame:RegisterForDrag("LeftButton")
+        exportFrame:SetScript("OnDragStart", exportFrame.StartMoving)
+        exportFrame:SetScript("OnDragStop", exportFrame.StopMovingOrSizing)
+
+        exportFrame:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 16,
+            insets   = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        exportFrame:SetBackdropColor(0.08, 0.08, 0.12, 0.95)
+        exportFrame:SetBackdropBorderColor(0.3, 0.3, 0.4, 1)
+
+        -- Title
+        local title = exportFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        title:SetPoint("TOP", 0, -12)
+        title:SetText(L.EXPORT_TITLE)
+        title:SetTextColor(0.9, 0.8, 0.2)
+
+        -- Close button
+        local closeBtn = CreateFrame("Button", nil, exportFrame, "UIPanelCloseButton")
+        closeBtn:SetPoint("TOPRIGHT", -4, -4)
+
+        -- Scroll frame
+        local scrollFrame = CreateFrame("ScrollFrame", "MeridianExportScroll", exportFrame, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 12, -40)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 40)
+
+        -- EditBox
+        local editBox = CreateFrame("EditBox", "MeridianExportEditBox", scrollFrame)
+        editBox:SetMultiLine(true)
+        editBox:SetAutoFocus(false)
+        editBox:SetFontObject(GameFontHighlightSmall)
+        editBox:SetWidth(scrollFrame:GetWidth() or 640)
+        editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        scrollFrame:SetScrollChild(editBox)
+
+        exportFrame.editBox = editBox
+
+        -- Select All button
+        local selectBtn = CreateFrame("Button", nil, exportFrame, "UIPanelButtonTemplate")
+        selectBtn:SetSize(140, 24)
+        selectBtn:SetPoint("BOTTOMLEFT", 12, 10)
+        selectBtn:SetText(L.SELECT_ALL)
+        selectBtn:SetScript("OnClick", function()
+            exportFrame.editBox:SetFocus()
+            exportFrame.editBox:HighlightText()
+        end)
+
+        -- Status
+        local status = exportFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        status:SetPoint("BOTTOM", 0, 14)
+        status:SetTextColor(0.6, 0.6, 0.6)
+        exportFrame.status = status
+
+        table.insert(UISpecialFrames, "MeridianExportFrame")
     end
 
-    self.exportFrame.editBox:SetText(content)
-    self.exportFrame:Show()
+    exportFrame.editBox:SetText(text)
+    local lineCount = select(2, text:gsub("\n", "")) + 1
+    local charCount = #text
+    exportFrame.status:SetText(format(L.EXPORT_STATUS, lineCount, charCount))
+    exportFrame:Show()
 
-    -- Sélectionner tout le texte pour faciliter la copie
     C_Timer.After(0.1, function()
-        if self.exportFrame and self.exportFrame:IsShown() then
-            self.exportFrame.editBox:SetFocus()
-            self.exportFrame.editBox:HighlightText()
-        end
+        exportFrame.editBox:SetFocus()
+        exportFrame.editBox:HighlightText()
     end)
 end
 
-function Export:CreateExportFrame()
-    local frame = CreateFrame("Frame", "MeridianExportFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(600, 450)
-    frame:SetPoint("CENTER")
-    frame:SetFrameStrata("DIALOG")
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-
-    frame:SetBackdrop({
-        bgFile   = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 12,
-        insets   = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    frame:SetBackdropColor(0.06, 0.06, 0.10, 0.97)
-    frame:SetBackdropBorderColor(0.20, 0.20, 0.25, 1)
-
-    -- Titre
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 14, -12)
-    title:SetText(L["EXPORT_TITLE"])
-    title:SetTextColor(0.20, 0.60, 0.86)
-
-    -- Instructions
-    local instructions = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    instructions:SetPoint("TOPRIGHT", -36, -14)
-    instructions:SetText(L["EXPORT_INSTRUCTIONS"])
-    instructions:SetTextColor(0.6, 0.6, 0.6)
-
-    -- Bouton fermer
-    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    closeBtn:SetPoint("TOPRIGHT", 2, 2)
-
-    -- ScrollFrame + EditBox
-    local scrollFrame = CreateFrame("ScrollFrame", "MeridianExportScroll", frame, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 12, -40)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 12)
-
-    local editBox = CreateFrame("EditBox", "MeridianExportEditBox", scrollFrame)
-    editBox:SetMultiLine(true)
-    editBox:SetAutoFocus(false)
-    editBox:SetFontObject(ChatFontNormal)
-    editBox:SetWidth(scrollFrame:GetWidth() or 540)
-    editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
-    scrollFrame:SetScrollChild(editBox)
-    frame.editBox = editBox
-
-    -- Échap pour fermer
-    tinsert(UISpecialFrames, "MeridianExportFrame")
-
-    frame:Hide()
-    self.exportFrame = frame
+-- ============================================================
+-- Public API
+-- ============================================================
+function Export:ExportAll()
+    local text, err = self:BuildExport(false)
+    if not text then
+        Meridian:Msg(err or L.NO_DATA)
+        return
+    end
+    self:ShowExportWindow(text)
+    Meridian:Msg(L.EXPORT_READY)
 end
+
+function Export:ExportZone()
+    local text, err = self:BuildExport(true)
+    if not text then
+        Meridian:Msg(err or L.NO_DATA)
+        return
+    end
+    self:ShowExportWindow(text)
+    Meridian:Msg(L.EXPORT_READY)
+end
+
+-- Register slash command callbacks
+Meridian:RegisterCallback("EXPORT_ALL", function()
+    Export:ExportAll()
+end)
+
+Meridian:RegisterCallback("EXPORT_ZONE", function()
+    Export:ExportZone()
+end)

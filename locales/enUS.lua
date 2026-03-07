@@ -1,30 +1,38 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("Meridian", "enUS", true)
+local _, ns = ...
 
--- General
-L["ADDON_LOADED"] = "Loaded — /mer to open"
-L["NEW_RESOURCE"] = "New resource: %s (id=%d)"
-L["NODE_RECORDED"] = "%s (%.2f, %.2f) — %d total"
-L["SPELL_LEARNED"] = "New gather spell learned: spellID %d"
+-- Default locale (enUS) — fallback for all languages
+local L = {
+    -- General
+    ADDON_LOADED = "Loaded \226\128\148 /mer to open",
+    NEW_RESOURCE = "New resource: %s (id=%d)",
+    NODE_RECORDED = "%s (%.2f, %.2f) \226\128\148 %d total",
+    SPELL_LEARNED = "New gather spell learned: spellID %d",
 
--- UI
-L["TITLE"] = "Meridian"
-L["TAB_ORES"] = "Ores"
-L["TAB_HERBS"] = "Herbs"
-L["NODES_COUNT"] = "%d nodes"
-L["EXPORT_CLAUDE"] = "Export for Claude"
-L["EXPORT_ZONE"] = "Export this zone"
-L["NO_DATA"] = "No data recorded yet."
-L["NO_DATA_TAB"] = "No %s recorded yet."
-L["EXPORT_TITLE"] = "Meridian — Export"
-L["EXPORT_INSTRUCTIONS"] = "Press Ctrl+A then Ctrl+C to copy."
+    -- UI
+    TITLE = "Meridian",
+    TAB_ORES = "Ores",
+    TAB_HERBS = "Herbs",
+    TOTAL_NODES = "%d nodes",
+    EXPORT_ALL = "Export for Claude",
+    EXPORT_ZONE = "Export this zone",
+    NO_DATA = "No data recorded yet.",
+    EXPORT_TITLE = "Meridian \226\128\148 Export",
+    SELECT_ALL = "Select All",
+    EXPORT_STATUS = "%d lines \226\128\148 %d chars",
+    EXPORT_READY = "Export ready \226\128\148 copy from the window.",
 
--- Commands
-L["CMD_HELP"] = "Commands: /mer — toggle window | /mer export — export | /mer reset — reset data"
-L["CMD_RESET_CONFIRM"] = "Type /mer reset confirm to erase all data."
-L["CMD_RESET_DONE"] = "All data has been erased."
+    -- Commands
+    CMD_HELP = "Commands: /mer \226\128\148 toggle window | /mer export \226\128\148 export | /mer reset \226\128\148 reset data",
+    CMD_RESET_CONFIRM = "Type /mer reset confirm to erase all data.",
+    CMD_RESET_DONE = "All data has been erased.",
 
--- Minimap
-L["MINIMAP_LEFT"] = "|cffFFFFFFLeft-Click|r to open Meridian"
-L["MINIMAP_RIGHT"] = "|cffFFFFFFRight-Click|r to toggle tracking"
-L["TRACKING_ENABLED"] = "Tracking |cff00ff00enabled|r"
-L["TRACKING_DISABLED"] = "Tracking |cffff0000disabled|r"
+    -- Minimap
+    TOOLTIP_NODES = "%d nodes recorded",
+    TOOLTIP_RESOURCES = "%d ores, %d herbs",
+    TOOLTIP_HINT = "|cffFFFFFFLeft-Click|r open | |cffFFFFFFRight-Click|r toggle tracking",
+    TRACKING_ON = "Tracking enabled",
+    TRACKING_OFF = "Tracking disabled",
+}
+
+ns.L = L
+ns.defaultLocale = L

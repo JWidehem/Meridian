@@ -55,6 +55,9 @@ local defaults = {
     knownResources = {},
     learnedSpells = {},
     nextColorIndex = 1,
+    -- Routes
+    routes = {},
+    activeRouteName = nil,
 }
 
 -- Deep copy a table
@@ -115,6 +118,9 @@ SlashCmdList["MERIDIAN"] = function(input)
 
     if cmd == "" then
         Meridian:FireCallback("TOGGLE_PANEL")
+
+    elseif cmd == "routes" or cmd == "route" then
+        Meridian:FireCallback("TOGGLE_ROUTES")
 
     elseif cmd == "export" then
         Meridian:FireCallback("EXPORT_ALL")

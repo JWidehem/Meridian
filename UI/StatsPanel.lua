@@ -139,10 +139,12 @@ function StatsPanel:CreatePanel()
     -- ============================================================
     -- Tabs
     -- ============================================================
-    local function CreateTab(parent, text, anchorPoint, anchorTo, xOff, yOff, tabKey)
+    local tabWidth = (PANEL_WIDTH - BAR_INSET * 2 - 4) / 3
+
+    local function CreateTab(parent, text, xOff, tabKey)
         local tab = CreateFrame("Button", nil, parent)
-        tab:SetSize((PANEL_WIDTH - BAR_INSET * 2) / 2 - 2, TAB_HEIGHT)
-        tab:SetPoint(anchorPoint, anchorTo, xOff, yOff)
+        tab:SetSize(tabWidth, TAB_HEIGHT)
+        tab:SetPoint("TOPLEFT", parent, "TOPLEFT", xOff, -(HEADER_HEIGHT + 2))
 
         local bg = tab:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
@@ -154,6 +156,12 @@ function StatsPanel:CreatePanel()
         tab.label = label
 
         tab:SetScript("OnClick", function()
+            if tabKey == "ROUTES" then
+                if ns.RoutePanel then
+                    ns.RoutePanel:Toggle()
+                end
+                return
+            end
             activeTab = tabKey
             StatsPanel:UpdateTabs()
             StatsPanel:RefreshBars()
@@ -163,10 +171,13 @@ function StatsPanel:CreatePanel()
         return tab
     end
 
-    local tabOre = CreateTab(panel, L.TAB_ORES, "TOPLEFT", panel, BAR_INSET, -(HEADER_HEIGHT + 2), "ORE")
-    local tabHerb = CreateTab(panel, L.TAB_HERBS, "TOPLEFT", panel, BAR_INSET + (PANEL_WIDTH - BAR_INSET * 2) / 2 + 2, -(HEADER_HEIGHT + 2), "HERB")
+    local x0 = BAR_INSET
+    local tabOre = CreateTab(panel, L.TAB_ORES, x0, "ORE")
+    local tabHerb = CreateTab(panel, L.TAB_HERBS, x0 + tabWidth + 2, "HERB")
+    local tabRoutes = CreateTab(panel, L.TAB_ROUTES, x0 + (tabWidth + 2) * 2, "ROUTES")
     panel.tabOre = tabOre
     panel.tabHerb = tabHerb
+    panel.tabRoutes = tabRoutes
 
     -- ============================================================
     -- Scroll area for bars
@@ -216,6 +227,11 @@ function StatsPanel:UpdateTabs()
     if not panel then return end
     local ore = panel.tabOre
     local herb = panel.tabHerb
+    local routes = panel.tabRoutes
+
+    -- Routes tab always same style (toggle button)
+    routes.bg:SetColorTexture(0.20, 0.60, 0.86, 0.2)
+    routes.label:SetTextColor(0.20, 0.60, 0.86)
 
     if activeTab == "ORE" then
         ore.bg:SetColorTexture(0.95, 0.61, 0.07, 0.3)

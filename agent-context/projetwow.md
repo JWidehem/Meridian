@@ -1,21 +1,20 @@
-# 📦 Projet : GatherMap — Add-on de Tracking & Routes de Farm WoW
+# 📦 Projet : Meridian — Add-on de Tracking de Nœuds de Farm WoW
 
-> **Nom de travail :** GatherMap  
+> **Nom de travail :** Meridian  
 > **Extension cible :** Midnight (Patch 12.0.x, 2026)  
 > **Interface version :** `120001`  
 > **Compatibilité Secret Values :** ✅ Non impacté (pas de données de combat)  
-> **Phases :** 2 (Data Collection → Route Display)
+> **Statut :** ✅ Phase 1 terminée et fonctionnelle — Phase 2 à définir
 
 ---
 
 ## 🎯 Vision Générale
 
-GatherMap est un add-on de collecte de données et d'affichage de routes optimisées pour le **farming de ressources** (herbes et minerais) dans World of Warcraft.
+Meridian est un add-on de collecte de données de nœuds de récolte (herbes et minerais) pour le **farming de ressources** dans World of Warcraft.
 
-Le projet se déroule en **deux phases distinctes** :
+**Phase 1 — TERMINÉE ✅** : Enregistrement silencieux de chaque nœud récolté (type, coordonnées, zone) dans une base de données locale exportable.
 
-1. **Phase 1 — GatherMap Tracker** : Enregistrer silencieusement chaque nœud récolté (type, coordonnées, zone) dans une base de données locale exportable.
-2. **Phase 2 — GatherMap Routes** : Afficher des routes optimisées sur la minimap et guider le joueur via une flèche de navigation (style TomTom), à partir soit des données collectées, soit de routes pré-calculées par IA.
+**Phase 2 — À DÉFINIR** : Les idées seront notées ici au fur et à mesure.
 
 ---
 
@@ -35,30 +34,36 @@ Joueur récolte           →    Export JSON/CSV des nodes    →    IA dessine 
 ## 📁 PHASE 1 — GatherMap Tracker
 
 ### Objectif
+
 Accumuler silencieusement une base de données de tous les nœuds récoltés par le joueur, avec localisation précise, pour atteindre un seuil statistiquement exploitable (~200 nodes par ressource par zone).
 
 ### Fonctionnalités
 
 #### Détection automatique de la récolte
+
 - Écoute l'événement `UNIT_SPELLCAST_SUCCEEDED` combiné à `LOOT_CLOSED` pour détecter une récolte réussie
 - Alternative : hook sur `BAG_UPDATE_DELAYED` + détection de l'item obtenu (herbalism/mining)
 - Identification du type de ressource via l'item looté (en cross-référençant `C_Item.GetItemInfo`)
 - **Totalement indépendant des Secret Values** : aucune donnée de combat impliquée
 
 #### Enregistrement des coordonnées
+
 - Utilisation de `C_Map.GetPlayerMapPosition(mapID, "player")` pour obtenir les coordonnées X/Y (0.0–1.0)
 - Conversion en coordonnées carte affichables (×100 pour obtenir le format XX.XX)
 - Enregistrement du `mapID` (identifiant de zone Blizzard) + nom de zone lisible via `C_Map.GetMapInfo(mapID)`
 - Enregistrement du `subZone` via `GetSubZoneText()` pour plus de précision
 
 #### Indépendance linguistique
+
 - L'identification de la ressource se fait par **ItemID** (identifiant numérique universel), pas par le nom affiché
 - Le nom est récupéré via `C_Item.GetItemInfo(itemID)` dans la langue du client, mais stocké avec l'ItemID comme clé primaire
 - Un mapping `ItemID → type` (HERB / ORE) et `ItemID → nom_canonique_enUS` est maintenu en interne
 - Fonctionne identiquement en français, anglais, allemand, etc.
 
 #### Structure de la base de données interne
+
 Chaque node enregistré contient :
+
 ```lua
 {
     itemID       = 12345,          -- Identifiant universel de la ressource
@@ -75,6 +80,7 @@ Chaque node enregistré contient :
 ```
 
 #### Interface de suivi (minimale, Phase 1)
+
 - **Icône minimap** (via LibDBIcon-1.0) pour ouvrir le panneau de stats
 - **Panneau de statistiques** simple :
   - Nombre de nodes enregistrés par ressource
@@ -84,10 +90,12 @@ Chaque node enregistré contient :
 - **Commande slash** : `/gathermap` ou `/gm`
 
 #### Seuils d'export configurables
+
 ```
 Seuil par défaut : 200 nodes par ressource par zone
 Configurable via l'interface : 50 / 100 / 200 / 500 / custom
 ```
+
 Quand le seuil est atteint pour une ressource dans une zone, une notification discrète s'affiche.
 
 ---
@@ -97,6 +105,7 @@ Quand le seuil est atteint pour une ressource dans une zone, une notification di
 L'export doit être **directement lisible par une IA** (Claude, GPT, etc.) et exploitable pour générer des routes optimisées.
 
 ### Format JSON (principal)
+
 ```json
 {
   "export_version": "1.0",
@@ -126,7 +135,7 @@ L'export doit être **directement lisible par une IA** (Claude, GPT, etc.) et ex
           "item_name_local": "Voidstone Ore",
           "item_name_enUS": "Voidstone Ore",
           "resource_type": "ORE",
-          "x": 38.10,
+          "x": 38.1,
           "y": 55.44,
           "sub_zone": "Eversong Woods",
           "timestamp": 1741300120,
@@ -146,6 +155,7 @@ L'export doit être **directement lisible par une IA** (Claude, GPT, etc.) et ex
 ```
 
 ### Format CSV (alternatif, pour tableurs)
+
 ```csv
 zone_id,zone_name,item_id,item_name_enUS,resource_type,x,y,sub_zone,timestamp,count
 2215,Quel'Thalas,12345,Midnight Herb,HERB,45.32,67.18,Silvermoon,1741300000,1
@@ -153,19 +163,20 @@ zone_id,zone_name,item_id,item_name_enUS,resource_type,x,y,sub_zone,timestamp,co
 ```
 
 ### Prompt IA recommandé (à fournir avec l'export)
+
 ```
-Voici mes données de farming WoW au format JSON, accompagnées d'un screenshot 
+Voici mes données de farming WoW au format JSON, accompagnées d'un screenshot
 de la zone [NOM_ZONE].
 
-Génère une route optimisée de farming pour [RESSOURCE / TOUTES LES HERBES / 
+Génère une route optimisée de farming pour [RESSOURCE / TOUTES LES HERBES /
 TOUS LES MINERAIS / TOUT] en tenant compte de :
 - La densité de nodes par zone de la carte
 - Un parcours en boucle fermée (départ = arrivée)
 - L'évitement des zones sans nodes
 - La priorité aux clusters de nodes denses
 
-Retourne la route sous forme d'une liste ordonnée de waypoints 
-{ "order": N, "x": XX.XX, "y": XX.XX, "note": "..." } 
+Retourne la route sous forme d'une liste ordonnée de waypoints
+{ "order": N, "x": XX.XX, "y": XX.XX, "note": "..." }
 que je pourrai importer dans mon add-on WoW.
 ```
 
@@ -174,11 +185,13 @@ que je pourrai importer dans mon add-on WoW.
 ## 🗺️ PHASE 2 — GatherMap Routes
 
 ### Objectif
+
 Afficher des routes de farming optimisées directement dans le jeu, en guidant le joueur waypoint par waypoint, avec possibilité de filtrer par ressource.
 
 ### Fonctionnalités
 
 #### Système de routes
+
 - **Import de routes** : Coller une liste de waypoints JSON dans l'interface (généré par l'IA)
 - **Routes sauvegardées** : Une route = un profil nommé (ex: "Quel'Thalas - Herbes", "Quel'Thalas - Tout")
 - **Filtrage des routes** par :
@@ -189,15 +202,18 @@ Afficher des routes de farming optimisées directement dans le jeu, en guidant l
 - **Activation/désactivation** en un clic depuis l'icône minimap
 
 #### Affichage sur la minimap
+
 - Tracé de la route sur la minimap avec des **icônes de nodes** (herbe = vert, minerai = jaune/orange)
 - **Waypoint actif** mis en surbrillance
 - **Lignes de connexion** entre les waypoints pour visualiser le parcours
 - Respect du style visuel WoW (pas de frames intrusives)
 
 #### Navigation — Flèche de guidage
+
 Deux options (configurables) :
 
 **Option A — Intégration TomTom (recommandé si l'utilisateur a TomTom installé)**
+
 ```lua
 -- Détection de TomTom et ajout de waypoints
 if TomTom then
@@ -211,6 +227,7 @@ end
 ```
 
 **Option B — Flèche native GatherMap (si TomTom absent)**
+
 - Frame custom avec une **texture de flèche** positionnée au centre de l'écran (ou au-dessus de l'action bar)
 - La flèche pointe vers le prochain waypoint
 - Calcul de l'angle via `C_Map.GetPlayerMapPosition` + trigonométrie simple
@@ -218,12 +235,14 @@ end
 - La flèche tourne en temps réel selon la direction du joueur
 
 #### Progression automatique des waypoints
+
 - Quand le joueur arrive dans un rayon de **~10 yards** du waypoint actuel → passage automatique au suivant
 - Si une récolte est détectée sur le waypoint → marquage comme "visité" (icône grisée sur minimap)
 - Bouton **"Passer"** pour sauter manuellement un waypoint
 - Bouton **"Recommencer la boucle"** pour repartir du début
 
 #### Interface Principale (Phase 2)
+
 ```
 ┌─────────────────────────────────┐
 │  🌿 GatherMap Routes            │
@@ -245,9 +264,11 @@ end
 ```
 
 #### Optimisation performance (Phase 2)
+
 - Les routes sont stockées sous forme de **waypoints pré-calculés** uniquement (pas les données brutes de nodes)
 - Une fois une route importée et sauvegardée, les données sources (200+ nodes) peuvent être **archivées ou supprimées** pour libérer de la mémoire
 - Structure d'une route sauvegardée :
+
 ```lua
 {
     name = "Quel'Thalas - Tout",
@@ -267,6 +288,7 @@ end
 ## 🏗️ Architecture Technique
 
 ### Structure de fichiers (Phase 1)
+
 ```
 GatherMap/
 ├── GatherMap.toc
@@ -295,6 +317,7 @@ GatherMap/
 ```
 
 ### Structure de fichiers (Phase 2, ajouts)
+
 ```
 GatherMap/
 ├── Core/
@@ -308,6 +331,7 @@ GatherMap/
 ```
 
 ### SavedVariables
+
 ```lua
 -- Données Phase 1 (brutes, volumineuses)
 GatherMapDB = {
@@ -434,13 +458,13 @@ end
 
 ### Pourquoi cette approche est supérieure
 
-| Critère | Ancienne approche | Approche sandwich |
-|---------|------------------|-------------------|
-| ItemIDs pré-configurés | ✅ Liste manuelle requise | ❌ Aucune liste nécessaire |
-| Nouvelles ressources Midnight | ✅ Mise à jour manuelle | ❌ Auto-découverte dès la 1ère récolte |
-| Indépendance linguistique | ⚠️ Mapping nom→langue requis | ✅ itemID universel extrait du lien |
-| Nom local automatique | ❌ Non | ✅ Oui, dans la langue du client |
-| Fiabilité | ⚠️ Dépend de la liste | ✅ Confirmé par 3 events indépendants |
+| Critère                       | Ancienne approche            | Approche sandwich                      |
+| ----------------------------- | ---------------------------- | -------------------------------------- |
+| ItemIDs pré-configurés        | ✅ Liste manuelle requise    | ❌ Aucune liste nécessaire             |
+| Nouvelles ressources Midnight | ✅ Mise à jour manuelle      | ❌ Auto-découverte dès la 1ère récolte |
+| Indépendance linguistique     | ⚠️ Mapping nom→langue requis | ✅ itemID universel extrait du lien    |
+| Nom local automatique         | ❌ Non                       | ✅ Oui, dans la langue du client       |
+| Fiabilité                     | ⚠️ Dépend de la liste        | ✅ Confirmé par 3 events indépendants  |
 
 ### Coordonnées et conversion
 
@@ -485,6 +509,7 @@ exportFrame:HighlightText()
 > ✅ **Aucune liste manuelle requise.** L'addon apprend automatiquement chaque ressource à la première récolte grâce à l'approche "sandwich" (voir section Détails Techniques).
 
 ### Fonctionnement de l'auto-découverte
+
 1. **Première récolte** d'une herbe ou d'un minerai → l'addon extrait l'`itemID` et le nom local depuis le lien WoW
 2. **Stockage automatique** dans `GatherMapDB.knownResources[itemID]` avec le type (HERB/ORE) et le nom
 3. **Dès la 2ème récolte** du même item → reconnaissance instantanée, pas de re-découverte
@@ -504,31 +529,20 @@ GatherMapDB.knownResources = {
 
 ## 🚀 Roadmap de Développement
 
-### Phase 1 — MVP Tracker (Priorité haute)
+### Phase 1 — MVP Tracker ✅ TERMINÉE (commit `f872d71`)
+
 - [x] Structure du projet et .toc
-- [ ] Système de détection de récolte — approche sandwich (`Tracker.lua`)
-- [ ] Auto-découverte et enregistrement des ressources (`Database.lua`)
-- [ ] Enregistrement des coordonnées (`Database.lua`)
-- [ ] Interface de stats simple (`StatsPanel.lua`)
-- [ ] Icône minimap (`MinimapIcon.lua`)
-- [ ] Export JSON/CSV (`Export.lua`)
-- [ ] Tests sur les zones de Midnight
+- [x] Système de détection de récolte — approche sandwich (`Tracker.lua`)
+- [x] Auto-découverte et enregistrement des ressources (`Database.lua`)
+- [x] Enregistrement des coordonnées (`Database.lua`)
+- [x] Interface de stats simple (`StatsPanel.lua`)
+- [x] Icône minimap (`MinimapIcon.lua`)
+- [x] Export JSON/CSV (`Export.lua`)
+- [x] Tests sur les zones de Midnight
 
-### Phase 2 — Routes & Navigation
-- [ ] Moteur de routes (`RouteEngine.lua`)
-- [ ] Import de routes (UI + parser JSON)
-- [ ] Tracé minimap (`MinimapDrawer.lua`)
-- [ ] Intégration TomTom (optionnelle)
-- [ ] Flèche de navigation native (`NavigationArrow.lua`)
-- [ ] Filtrage par ressource
-- [ ] Sauvegarde et gestion des routes
-- [ ] Nettoyage/archivage des données brutes
+### Phase 2 — À DÉFINIR
 
-### Futur (Phase 3 — optionnel)
-- [ ] Partage de routes entre joueurs via addon messages
-- [ ] Statistiques de farming (items/heure par route)
-- [ ] Heatmap de densité sur la minimap (Phase 1 enrichie)
-- [ ] Export direct vers wago.io ou site dédié
+> Les idées seront ajoutées ici au fil de la conversation.
 
 ---
 
@@ -592,4 +606,4 @@ local defaults = {
 
 ---
 
-*Brief de projet rédigé le 07/03/2026 — À utiliser conjointement avec `agent.md` pour le développement.*
+_Brief de projet rédigé le 07/03/2026 — À utiliser conjointement avec `agent.md` pour le développement._

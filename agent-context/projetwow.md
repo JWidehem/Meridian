@@ -182,9 +182,13 @@ que je pourrai importer dans mon add-on WoW.
 
 ---
 
-## 🗺️ PHASE 2 — GatherMap Routes
+## ❌ PHASE 2 — Routes (ANNULÉE)
 
-### Objectif
+> **Cette phase a été abandonnée.** Tous les fichiers de route ont été supprimés du dépôt (rollback git + purge disque). Ne jamais réimplémenter ces fichiers : `RouteEngine.lua`, `RoutePanel.lua`, `MinimapDrawer.lua`, `NavigationArrow.lua`, `DefaultRoutes.lua`.
+>
+> La documentation ci-dessous est **archivée à titre de référence uniquement** — elle ne reflète plus le code existant.
+
+### Objectif (archivé)
 
 Afficher des routes de farming optimisées directement dans le jeu, en guidant le joueur waypoint par waypoint, avec possibilité de filtrer par ressource.
 
@@ -287,64 +291,58 @@ end
 
 ## 🏗️ Architecture Technique
 
-### Structure de fichiers (Phase 1)
+### Structure de fichiers — Meridian (état actuel)
 
 ```
-GatherMap/
-├── GatherMap.toc
+Meridian/
+├── Meridian.toc
 ├── Core/
-│   ├── GatherMap.lua          ← Init, lifecycle, commandes slash
-│   ├── Tracker.lua            ← Détection et enregistrement des nodes
-│   ├── Database.lua           ← Gestion de la base de données locale
-│   └── Export.lua             ← Génération du JSON/CSV exportable
+│   ├── Meridian.lua           ← Init, lifecycle, commandes slash (/mer)
+│   ├── Database.lua           ← Stockage nodes, queries, palette couleurs Glimmer
+│   ├── Tracker.lua            ← Détection récolte (approche sandwich)
+│   └── Export.lua             ← Sérialisation JSON + fenêtre d'export (EditBox)
 ├── UI/
-│   ├── MinimapIcon.lua        ← Icône minimap (LibDBIcon)
-│   └── StatsPanel.lua         ← Panneau de statistiques et bouton export
-├── Data/
-│   └── KnownResources.lua     ← Mapping ItemID → type/nom canonique
-├── libs/
-│   ├── LibStub/
-│   ├── AceAddon-3.0/
-│   ├── AceDB-3.0/
-│   ├── AceConsole-3.0/
-│   ├── AceEvent-3.0/
-│   ├── LibDataBroker-1.1/
-│   └── LibDBIcon-1.0/
-├── locales/
-│   ├── enUS.lua
-│   └── frFR.lua
-└── GatherMap.toc
+│   ├── MinimapIcon.lua        ← Bouton minimap (style Glimmer)
+│   └── StatsPanel.lua         ← Panneau stats Glimmer (onglets ORE/HERB, par zone)
+└── locales/
+    ├── enUS.lua
+    └── frFR.lua
 ```
 
-### Structure de fichiers (Phase 2, ajouts)
+**Pas de librairies tierces.** AceAddon, LibStub, LibDBIcon et consorts ont été supprimés — l'addon utilise 100% l'API WoW native.
+
+### Structure de fichiers — Phase 2 (ajouts, ANNULÉE)
+
+_(archivé — ne pas implémenter)_
 
 ```
-GatherMap/
-├── Core/
-│   └── RouteEngine.lua        ← Gestion des routes, progression waypoints
-├── UI/
-│   ├── RoutePanel.lua         ← Interface principale Phase 2
-│   ├── MinimapDrawer.lua      ← Tracé des routes sur la minimap
-│   └── NavigationArrow.lua    ← Flèche de guidage (si pas TomTom)
-└── Data/
-    └── Routes/                ← Routes sauvegardées (JSON importés)
+RouteEngine.lua     ← supprimé
+RoutePanel.lua      ← supprimé
+MinimapDrawer.lua   ← supprimé
+NavigationArrow.lua ← supprimé
+DefaultRoutes.lua   ← supprimé
 ```
 
 ### SavedVariables
 
 ```lua
--- Données Phase 1 (brutes, volumineuses)
-GatherMapDB = {
-    nodes = { ... }       -- Tous les nodes enregistrés
-    settings = { ... }    -- Paramètres utilisateur
-    stats = { ... }       -- Statistiques de session
-}
-
--- Données Phase 2 (légères, permanentes)
-GatherMapRoutesDB = {
-    routes = { ... }      -- Routes pré-calculées importées
-    activeRoute = nil     -- Route actuellement active
-    settings = { ... }
+-- Une seule SavedVariable (par compte Battle.net)
+MeridianDB = {
+    settings = {
+        minimapPos = 220,
+        -- autres paramètres à venir
+    },
+    nodes = {
+        -- Indexé par mapID → tableau séquentiel de nodes
+        [2215] = {
+            { itemID=12345, itemName="Midnight Herb", resourceType="HERB",
+              x=45.32, y=67.18, zoneName="Quel'Thalas", timestamp=1741300000 },
+        },
+    },
+    knownResources = {
+        -- itemID → { name, resourceType, colorIndex }
+        [12345] = { name="Midnight Herb", resourceType="HERB", colorIndex=1 },
+    },
 }
 ```
 
@@ -483,6 +481,35 @@ local function GetPlayerCoords()
     }
 end
 ```
+
+---
+
+## 📊 Suivi des modifications
+
+| Date | Commit | Description |
+|------|--------|-------------|
+| 2026-03-07 | `f872d71` | Phase 1 stable — tracking, DB, export fonctionnels |
+| 2026-03-07 | rollback | `git reset --hard f872d71` (avant données de navigation) |
+| 2026-03-08 | — | Suppression totale Phase 2 : RouteEngine, RoutePanel, MinimapDrawer, NavigationArrow, DefaultRoutes |
+| 2026-03-08 | — | Application design language Glimmer Glass (StatsPanel + MinimapIcon) |
+| 2026-03-08 | — | Correction double StatsPanel (deux implémentations concaténées dans le fichier) |
+| 2026-03-08 | — | Export unique (Export for Claude), bouton fermer `×` Glimmer |
+| 2026-03-08 | `b3c7096` | Stats groupées par zone — `Database:GetZoneBreakdownByType()` + headers de zone |
+
+### État actuel (HEAD : `b3c7096`)
+
+- ✅ Tracking automatique de tous les nœuds récoltés (herbes + minerais)
+- ✅ Base de données permanente (SavedVariables `MeridianDB`)
+- ✅ Export JSON pour Claude (fenêtre EditBox, copier-coller)
+- ✅ Interface Glimmer Glass — transparent, sobre, verre sur le monde
+- ✅ Stats groupées par zone avec mise en évidence de la zone courante
+- ✅ Deux onglets : Minerais / Herbes
+- ✅ Commandes slash : `/mer` (toggle), `/mer export`, `/mer reset`
+- ❌ Routes / Navigation : supprimé définitivement, ne pas réimplémenter
+
+### Phase 2 — Idées futures (à définir)
+
+_(À compléter au fil des discussions — aucune feature n'est planifiée pour l'instant)_
 
 ### Export JSON depuis Lua
 

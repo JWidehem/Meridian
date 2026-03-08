@@ -929,6 +929,121 @@ C_Map.GetPlayerMapPosition(mapID, "player")
 
 ---
 
+## 🎨 Design Language Meridian : Glimmer Glass
+
+> **Règle absolue :** Tout nouveau composant UI de Meridian respecte ce design language sans exception. Pas de `BackdropTemplate`, pas de fond coloré, pas de chrome WoW — uniquement le verre.
+
+### Philosophie
+
+Meridian adopte le design language **Glimmer** de Google, conçu à l'origine pour les lunettes AR. Principe central : l'interface est **du verre posé sur le monde**. Le joueur voit le jeu à travers l'UI. Aucun fond opaque, aucune couleur vive — seuls la transparence, une légère obscurité et de fins reflets signalent la présence de l'interface.
+
+### Surface de verre — Fond
+
+```lua
+-- ✅ Fond Glimmer correct : noir quasi-transparent (valeur canonique Meridian)
+local bg = frame:CreateTexture(nil, "BACKGROUND")
+bg:SetAllPoints(frame)
+bg:SetColorTexture(0.02, 0.02, 0.03, 0.68)
+
+-- ❌ Interdit : fond coloré, gradient de couleur, BackdropTemplate WoW
+frame:SetBackdrop({ bgFile = "..." })    -- JAMAIS
+bg:SetColorTexture(0.1, 0.0, 0.2, 0.9)  -- JAMAIS (trop couleur/opaque)
+```
+
+### Bordures
+
+4 textures séparées de 1px — jamais `BackdropTemplate` :
+
+```lua
+local function AddGlimmerBorder(frame)
+    local function Edge(a1, a2, w, h)
+        local t = frame:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(1, 1, 1, 0.10)   -- blanc 10% alpha
+        t:SetPoint(a1, frame, a1)
+        t:SetPoint(a2, frame, a2)
+        if w then t:SetWidth(w) else t:SetHeight(h) end
+    end
+    Edge("TOPLEFT",    "TOPRIGHT",    nil, 1)  -- haut
+    Edge("BOTTOMLEFT", "BOTTOMRIGHT", nil, 1)  -- bas
+    Edge("TOPLEFT",    "BOTTOMLEFT",  1,   nil) -- gauche
+    Edge("TOPRIGHT",   "BOTTOMRIGHT", 1,   nil) -- droite
+end
+```
+
+### Barres de ressources (Glow-trail)
+
+Les barres utilisent un dégradé horizontal "glow-trail" — jamais une couleur unie :
+
+```lua
+-- Palette Glimmer (8 couleurs désaturées, cycliques par colorIndex)
+local GLIMMER_COLORS = {
+    { r=0.56, g=0.85, b=0.72 },  -- mint
+    { r=0.95, g=0.78, b=0.45 },  -- ambre
+    { r=0.50, g=0.75, b=0.95 },  -- ciel
+    { r=0.90, g=0.58, b=0.62 },  -- rose
+    { r=0.72, g=0.62, b=0.90 },  -- lavande
+    { r=0.48, g=0.82, b=0.80 },  -- teal
+    { r=0.95, g=0.82, b=0.48 },  -- or
+    { r=0.90, g=0.70, b=0.72 },  -- rose poudré
+}
+
+-- Application du gradient : transparent à gauche → lumineux à droite
+local c = GLIMMER_COLORS[colorIndex]
+barTex:SetGradient("HORIZONTAL",
+    CreateColor(c.r, c.g, c.b, 0.15),   -- début : quasi-transparent
+    CreateColor(c.r, c.g, c.b, 0.75)    -- fin : lumineux
+)
+```
+
+### Onglets
+
+| État | Fond | Ligne de soulignement |
+|------|------|-----------------------|
+| Actif | Gradient couleur ressource `0 → 0.25 alpha` | 2px, même couleur à `0.85` alpha |
+| Inactif | `SetColorTexture(0, 0, 0, 0)` (transparent) | Aucune |
+
+### Bouton de fermeture
+
+Ne jamais utiliser `UIPanelCloseButton`. Créer un `×` texte custom :
+
+```lua
+local closeBtn = CreateFrame("Button", nil, frame)
+closeBtn:SetSize(20, 20)
+closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -6)
+local closeTxt = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+closeTxt:SetAllPoints(closeBtn)
+closeTxt:SetText("×")
+closeTxt:SetTextColor(1, 1, 1, 0.45)
+closeBtn:SetScript("OnEnter", function() closeTxt:SetTextColor(1, 1, 1, 0.90) end)
+closeBtn:SetScript("OnLeave", function() closeTxt:SetTextColor(1, 1, 1, 0.45) end)
+closeBtn:SetScript("OnClick", function() frame:Hide() end)
+```
+
+### Icône Minimap
+
+```lua
+bg:SetColorTexture(0.02, 0.02, 0.03, 0.85)  -- fond circulaire sombre
+ring:SetColorTexture(1, 1, 1, 0.35)          -- anneau de bordure discret
+highlight:SetColorTexture(1, 1, 1, 0.60)     -- highlight au survol
+highlight:SetBlendMode("ADD")                 -- blend mode lumineux
+```
+
+### Récapitulatif des valeurs canoniques
+
+| Élément | Paramètre |
+|---------|-----------|
+| Surface (verre) | `SetColorTexture(0.02, 0.02, 0.03, 0.68)` |
+| Bordures 1px | Blanc, alpha `0.10` |
+| Barre début | Couleur ressource, alpha `0.15` |
+| Barre fin | Couleur ressource, alpha `0.75` |
+| Onglet actif (fond) | Couleur ressource, `0 → 0.25` alpha |
+| Onglet actif (ligne) | Couleur ressource, alpha `0.85` |
+| Bouton `×` | Blanc `0.45` → `0.90` au survol |
+| Fond minimap | `0.02, 0.02, 0.03`, alpha `0.85` |
+| Anneau minimap | Blanc, alpha `0.35` |
+
+---
+
 ## 🔧 Outils de Développement
 
 ### IDE et éditeurs recommandés

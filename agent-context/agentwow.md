@@ -229,6 +229,7 @@ local price = Auctionator and Auctionator.API and Auctionator.API.v1
 ```
 
 Déclarer dans le `.toc` :
+
 ```toc
 ## OptionalDeps: Auctionator
 ```

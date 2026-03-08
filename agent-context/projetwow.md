@@ -14,7 +14,7 @@ Meridian est un add-on de collecte et d'analyse de nœuds de récolte (herbes et
 
 **Différentiel vs GatherMate/Wowhead :** ces outils se basent sur les spawn points théoriques. Meridian collecte des données **réelles** — uniquement les ressources effectivement récoltées, filtrées naturellement (zones élites, packs de mobs, accès difficiles ignorés).
 
-**Vision finale (Phase 2) :** tu ouvres WoW, tu scannes l'HV avec Auctionator, Meridian croise les prix et ta densité de nœuds et te dit : *"Cette session, va dans Arandar."* Zéro réflexion, farming optimisé entre deux arènes.
+**Vision finale (Phase 2) :** tu ouvres WoW, tu scannes l'HV avec Auctionator, Meridian croise les prix et ta densité de nœuds et te dit : _"Cette session, va dans Arandar."_ Zéro réflexion, farming optimisé entre deux arènes.
 
 ---
 
@@ -133,16 +133,16 @@ MeridianDB = {
 | 2026-03-08 | —         | Design language Glimmer Glass (StatsPanel + MinimapIcon)                        |
 | 2026-03-08 | —         | Export unique (Export for Claude), bouton fermer `×` Glimmer                    |
 | 2026-03-08 | `b3c7096` | Stats groupées par zone — `Database:GetZoneBreakdownByType()` + headers de zone |
-| 2026-03-08 | `16fb580` | Docs : optimisation contexte agent (agentwow 1039→240, projetwow 370→112)         |
-| 2026-03-08 | —         | Vision Phase 2 documentée : Oracle de farming (prix HV × densité nœuds)           |
+| 2026-03-08 | `16fb580` | Docs : optimisation contexte agent (agentwow 1039→240, projetwow 370→112)       |
+| 2026-03-08 | —         | Vision Phase 2 documentée : Oracle de farming (prix HV × densité nœuds)         |
 
 ---
 
 ## 🔌 Dépendances
 
-| Add-on          | Rôle                                         | Requis pour               |
-| --------------- | -------------------------------------------- | ------------------------- |
-| **Auctionator** | Prix HV locaux via `Auctionator.API.v1`       | Phase 2 Oracle uniquement |
+| Add-on          | Rôle                                    | Requis pour               |
+| --------------- | --------------------------------------- | ------------------------- |
+| **Auctionator** | Prix HV locaux via `Auctionator.API.v1` | Phase 2 Oracle uniquement |
 
 Sans Auctionator installé et à jour, l'Oracle affiche "Auctionator requis" — la Phase 1 fonctionne normalement sans aucune dépendance.
 
@@ -157,7 +157,7 @@ Sans Auctionator installé et à jour, l'Oracle affiche "Auctionator requis" —
 1. Tu fais ton scan Auctionator habituel à l'hôtel des ventes
 2. Meridian lit les prix via `Auctionator.API.v1.GetAuctionPriceByItemID("Meridian", itemID)`
 3. Oracle calcule : `score_zone = Σ (prix × nb_noeuds_par_item_dans_zone)`
-4. Recommandation affichée : *"Meilleure zone : Arandar | ORE: Midnight Iron | HERB: Moonbloom"*
+4. Recommandation affichée : _"Meilleure zone : Arandar | ORE: Midnight Iron | HERB: Moonbloom"_
 
 ### Nouveaux fichiers (Phase 2)
 

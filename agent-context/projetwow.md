@@ -4,7 +4,7 @@
 > **Extension cible :** Midnight (Patch 12.0.x, 2026)  
 > **Interface version :** `120001`  
 > **Compatibilité Secret Values :** ✅ Non impacté (pas de données de combat)  
-> **Statut :** ✅ Phase 1 terminée et fonctionnelle — Phase 2 à définir
+> **Statut :** ✅ Fonctionnel
 
 ---
 
@@ -12,30 +12,28 @@
 
 Meridian est un add-on de collecte de données de nœuds de récolte (herbes et minerais) pour le **farming de ressources** dans World of Warcraft.
 
-**Phase 1 — TERMINÉE ✅** : Enregistrement silencieux de chaque nœud récolté (type, coordonnées, zone) dans une base de données locale exportable.
-
-**Phase 2 — À DÉFINIR** : Les idées seront notées ici au fur et à mesure.
+Enregistrement silencieux de chaque nœud récolté (type, coordonnées, zone) dans une base de données locale exportable. Interface Glimmer Glass, stats par zone, export JSON pour Claude.
 
 ---
 
 ## 🔄 Workflow Global
 
 ```
-[PHASE 1]                          [EXTERNE]                        [PHASE 2]
-Joueur récolte           →    Export JSON/CSV des nodes    →    IA dessine la route
-  → Node enregistré            + Screenshot de la zone          → Route importée
-  → Coordonnées + zone         → IA génère la route optimale    → Affichage minimap
-  → Type de ressource          → Route exportée (waypoints)     → Flèche de guidage
-  → Timestamp                                                    → Filtrage par ressource
+[IN-GAME]                          [EXTERNE]
+Joueur récolte           →    Export JSON des nodes
+  → Node enregistré            → Coller dans Claude
+  → Coordonnées + zone         → Analyse / optimisation
+  → Type de ressource
+  → Timestamp
 ```
 
 ---
 
-## 📁 PHASE 1 — GatherMap Tracker
+## 📁 Meridian — Tracker de Nœuds
 
 ### Objectif
 
-Accumuler silencieusement une base de données de tous les nœuds récoltés par le joueur, avec localisation précise, pour atteindre un seuil statistiquement exploitable (~200 nodes par ressource par zone).
+Accumuler silencieusement une base de données de tous les nœuds récoltés par le joueur, avec localisation précise.
 
 ### Fonctionnalités
 
@@ -79,28 +77,19 @@ Chaque node enregistré contient :
 }
 ```
 
-#### Interface de suivi (minimale, Phase 1)
+#### Interface (Glimmer Glass)
 
-- **Icône minimap** (via LibDBIcon-1.0) pour ouvrir le panneau de stats
-- **Panneau de statistiques** simple :
-  - Nombre de nodes enregistrés par ressource
-  - Nombre de nodes par zone
-  - Barre de progression vers le seuil d'export (ex: 200 nodes par ressource)
-  - Bouton **"Exporter"** pour générer le fichier de données
-- **Commande slash** : `/gathermap` ou `/gm`
-
-#### Seuils d'export configurables
-
-```
-Seuil par défaut : 200 nodes par ressource par zone
-Configurable via l'interface : 50 / 100 / 200 / 500 / custom
-```
-
-Quand le seuil est atteint pour une ressource dans une zone, une notification discrète s'affiche.
+- **Icône minimap** Glimmer pour ouvrir le panneau de stats
+- **Panneau de statistiques** :
+  - Deux onglets : Minerais / Herbes
+  - Stats groupées par zone, zone courante mise en évidence
+  - Barres glow-trail par ressource (proportionnelles au max global)
+  - Bouton **"Export for Claude"** — génère le JSON dans une EditBox
+- **Commandes slash** : `/mer` (toggle), `/mer export`, `/mer reset`
 
 ---
 
-## 📤 Format d'Export (Phase 1 → IA)
+## 📤 Format d'Export
 
 L'export doit être **directement lisible par une IA** (Claude, GPT, etc.) et exploitable pour générer des routes optimisées.
 
@@ -165,126 +154,9 @@ zone_id,zone_name,item_id,item_name_enUS,resource_type,x,y,sub_zone,timestamp,co
 ### Prompt IA recommandé (à fournir avec l'export)
 
 ```
-Voici mes données de farming WoW au format JSON, accompagnées d'un screenshot
-de la zone [NOM_ZONE].
-
-Génère une route optimisée de farming pour [RESSOURCE / TOUTES LES HERBES /
-TOUS LES MINERAIS / TOUT] en tenant compte de :
-- La densité de nodes par zone de la carte
-- Un parcours en boucle fermée (départ = arrivée)
-- L'évitement des zones sans nodes
-- La priorité aux clusters de nodes denses
-
-Retourne la route sous forme d'une liste ordonnée de waypoints
-{ "order": N, "x": XX.XX, "y": XX.XX, "note": "..." }
-que je pourrai importer dans mon add-on WoW.
-```
-
----
-
-## ❌ PHASE 2 — Routes (ANNULÉE)
-
-> **Cette phase a été abandonnée.** Tous les fichiers de route ont été supprimés du dépôt (rollback git + purge disque). Ne jamais réimplémenter ces fichiers : `RouteEngine.lua`, `RoutePanel.lua`, `MinimapDrawer.lua`, `NavigationArrow.lua`, `DefaultRoutes.lua`.
->
-> La documentation ci-dessous est **archivée à titre de référence uniquement** — elle ne reflète plus le code existant.
-
-### Objectif (archivé)
-
-Afficher des routes de farming optimisées directement dans le jeu, en guidant le joueur waypoint par waypoint, avec possibilité de filtrer par ressource.
-
-### Fonctionnalités
-
-#### Système de routes
-
-- **Import de routes** : Coller une liste de waypoints JSON dans l'interface (généré par l'IA)
-- **Routes sauvegardées** : Une route = un profil nommé (ex: "Quel'Thalas - Herbes", "Quel'Thalas - Tout")
-- **Filtrage des routes** par :
-  - Une ressource spécifique (ex: "Midnight Herb uniquement")
-  - Toutes les herbes
-  - Tous les minerais
-  - Herbes + minerais combinés
-- **Activation/désactivation** en un clic depuis l'icône minimap
-
-#### Affichage sur la minimap
-
-- Tracé de la route sur la minimap avec des **icônes de nodes** (herbe = vert, minerai = jaune/orange)
-- **Waypoint actif** mis en surbrillance
-- **Lignes de connexion** entre les waypoints pour visualiser le parcours
-- Respect du style visuel WoW (pas de frames intrusives)
-
-#### Navigation — Flèche de guidage
-
-Deux options (configurables) :
-
-**Option A — Intégration TomTom (recommandé si l'utilisateur a TomTom installé)**
-
-```lua
--- Détection de TomTom et ajout de waypoints
-if TomTom then
-    TomTom:AddWaypoint(mapID, x/100, y/100, {
-        title = "GatherMap: " .. nodeName,
-        persistent = false,
-        minimap = true,
-        world = true,
-    })
-end
-```
-
-**Option B — Flèche native GatherMap (si TomTom absent)**
-
-- Frame custom avec une **texture de flèche** positionnée au centre de l'écran (ou au-dessus de l'action bar)
-- La flèche pointe vers le prochain waypoint
-- Calcul de l'angle via `C_Map.GetPlayerMapPosition` + trigonométrie simple
-- Distance affichée sous la flèche (en yards via `C_Map` ou estimation)
-- La flèche tourne en temps réel selon la direction du joueur
-
-#### Progression automatique des waypoints
-
-- Quand le joueur arrive dans un rayon de **~10 yards** du waypoint actuel → passage automatique au suivant
-- Si une récolte est détectée sur le waypoint → marquage comme "visité" (icône grisée sur minimap)
-- Bouton **"Passer"** pour sauter manuellement un waypoint
-- Bouton **"Recommencer la boucle"** pour repartir du début
-
-#### Interface Principale (Phase 2)
-
-```
-┌─────────────────────────────────┐
-│  🌿 GatherMap Routes            │
-├─────────────────────────────────┤
-│  Zone : Quel'Thalas             │
-│                                 │
-│  Filtre :                       │
-│  ○ Toutes les herbes            │
-│  ○ Tous les minerais            │
-│  ● Tout (herbes + minerais)     │
-│  ○ Ressource spécifique : [▼]   │
-│                                 │
-│  Route : [Quel'Thalas - Tout ▼] │
-│  Waypoints : 47 | Restants : 23 │
-│                                 │
-│  [▶ Démarrer]  [⏸ Pause]  [⏹]  │
-│  [Importer route] [Gérer routes]│
-└─────────────────────────────────┘
-```
-
-#### Optimisation performance (Phase 2)
-
-- Les routes sont stockées sous forme de **waypoints pré-calculés** uniquement (pas les données brutes de nodes)
-- Une fois une route importée et sauvegardée, les données sources (200+ nodes) peuvent être **archivées ou supprimées** pour libérer de la mémoire
-- Structure d'une route sauvegardée :
-
-```lua
-{
-    name = "Quel'Thalas - Tout",
-    mapID = 2215,
-    filter = "ALL",           -- "ALL", "HERB", "ORE", "SPECIFIC:12345"
-    created = 1741300000,
-    waypoints = {
-        { order = 1, x = 45.32, y = 67.18, label = "Midnight Herb", type = "HERB" },
-        { order = 2, x = 38.10, y = 55.44, label = "Voidstone Ore", type = "ORE" },
-        -- ...
-    }
-}
+Voici mes données de farming WoW au format JSON.
+Analyse la densité et la répartition des nœuds par zone.
+[Question libre selon le besoin du moment]
 ```
 
 ---
@@ -310,18 +182,6 @@ Meridian/
 ```
 
 **Pas de librairies tierces.** AceAddon, LibStub, LibDBIcon et consorts ont été supprimés — l'addon utilise 100% l'API WoW native.
-
-### Structure de fichiers — Phase 2 (ajouts, ANNULÉE)
-
-_(archivé — ne pas implémenter)_
-
-```
-RouteEngine.lua     ← supprimé
-RoutePanel.lua      ← supprimé
-MinimapDrawer.lua   ← supprimé
-NavigationArrow.lua ← supprimé
-DefaultRoutes.lua   ← supprimé
-```
 
 ### SavedVariables
 
@@ -486,14 +346,11 @@ end
 
 ## 📊 Suivi des modifications
 
-| Date | Commit | Description |
-|------|--------|-------------|
-| 2026-03-07 | `f872d71` | Phase 1 stable — tracking, DB, export fonctionnels |
-| 2026-03-07 | rollback | `git reset --hard f872d71` (avant données de navigation) |
-| 2026-03-08 | — | Suppression totale Phase 2 : RouteEngine, RoutePanel, MinimapDrawer, NavigationArrow, DefaultRoutes |
-| 2026-03-08 | — | Application design language Glimmer Glass (StatsPanel + MinimapIcon) |
-| 2026-03-08 | — | Correction double StatsPanel (deux implémentations concaténées dans le fichier) |
-| 2026-03-08 | — | Export unique (Export for Claude), bouton fermer `×` Glimmer |
+| Date       | Commit    | Description                                                                     |
+| ---------- | --------- | ------------------------------------------------------------------------------- |
+| 2026-03-07 | `f872d71` | Tracking, DB, export fonctionnels                                               |
+| 2026-03-08 | —         | Design language Glimmer Glass (StatsPanel + MinimapIcon)                        |
+| 2026-03-08 | —         | Export unique (Export for Claude), bouton fermer `×` Glimmer                   |
 | 2026-03-08 | `b3c7096` | Stats groupées par zone — `Database:GetZoneBreakdownByType()` + headers de zone |
 
 ### État actuel (HEAD : `b3c7096`)
@@ -505,11 +362,10 @@ end
 - ✅ Stats groupées par zone avec mise en évidence de la zone courante
 - ✅ Deux onglets : Minerais / Herbes
 - ✅ Commandes slash : `/mer` (toggle), `/mer export`, `/mer reset`
-- ❌ Routes / Navigation : supprimé définitivement, ne pas réimplémenter
 
-### Phase 2 — Idées futures (à définir)
+### Phase 2 — À définir
 
-_(À compléter au fil des discussions — aucune feature n'est planifiée pour l'instant)_
+_(Tu m'expliqueras ici ce qu'on va faire ensuite.)_
 
 ### Export JSON depuis Lua
 
@@ -543,33 +399,32 @@ exportFrame:HighlightText()
 
 ```lua
 -- Exemple de ce que la base apprend toute seule après quelques récoltes :
-GatherMapDB.knownResources = {
+MeridianDB.knownResources = {
     [12345] = { type = "HERB", name = "Fleur de Minuit",    firstSeen = 1741300000 },
     [67890] = { type = "ORE",  name = "Minerai de Voïdite", firstSeen = 1741300050 },
     -- ... enrichi automatiquement à chaque nouvelle ressource
 }
 ```
 
-> 💡 Le fichier `KnownResources.lua` n'est plus nécessaire — la DB se construit en jouant. Cependant, on peut optionnellement l'exporter et le partager avec la communauté.
+> 💡 Le fichier `KnownResources.lua` n'est plus nécessaire — la DB se construit en jouant.
 
 ---
 
-## 🚀 Roadmap de Développement
+## 🚀 Roadmap
 
-### Phase 1 — MVP Tracker ✅ TERMINÉE (commit `f872d71`)
+### Fonctionnalités implémentées ✅
 
 - [x] Structure du projet et .toc
-- [x] Système de détection de récolte — approche sandwich (`Tracker.lua`)
+- [x] Détection de récolte — approche sandwich (`Tracker.lua`)
 - [x] Auto-découverte et enregistrement des ressources (`Database.lua`)
 - [x] Enregistrement des coordonnées (`Database.lua`)
-- [x] Interface de stats simple (`StatsPanel.lua`)
-- [x] Icône minimap (`MinimapIcon.lua`)
-- [x] Export JSON/CSV (`Export.lua`)
-- [x] Tests sur les zones de Midnight
+- [x] Interface Glimmer Glass (`StatsPanel.lua`) — stats par zone, deux onglets
+- [x] Icône minimap Glimmer (`MinimapIcon.lua`)
+- [x] Export JSON pour Claude (`Export.lua`)
 
-### Phase 2 — À DÉFINIR
+### Prochaines étapes
 
-> Les idées seront ajoutées ici au fil de la conversation.
+> À définir.
 
 ---
 
@@ -578,26 +433,11 @@ GatherMapDB.knownResources = {
 ```lua
 local defaults = {
     profile = {
-        -- Phase 1
         enabled = true,
         tracking = {
             trackHerbs = true,
             trackOres = true,
-            exportThreshold = 200,    -- nodes avant notification d'export
-            exportFormat = "JSON",    -- "JSON" ou "CSV"
         },
-        -- Phase 2
-        navigation = {
-            useTomTom = true,         -- Priorité à TomTom si installé
-            showArrow = true,         -- Flèche native (si pas TomTom)
-            arrowSize = 64,           -- Taille en pixels
-            arrowAlpha = 0.9,
-            arrowPosition = "CENTER", -- "CENTER", "BOTTOM"
-            arrivalRadius = 10,       -- Yards pour valider un waypoint
-            showMinimapLine = true,
-            minimapLineColor = { r=0.2, g=1.0, b=0.4, a=0.8 },
-        },
-        -- UI
         minimap = { hide = false },
     }
 }
@@ -605,15 +445,13 @@ local defaults = {
 
 ---
 
-## 🎨 Identité Visuelle
+## 🎨 Identité Visuelle — Glimmer Glass
 
-- **Couleurs** :
-  - Herbes : `#2ECC71` (vert émeraude)
-  - Minerais : `#F39C12` (orange/doré)
-  - Route active : `#3498DB` (bleu)
-  - Waypoint visité : `#95A5A6` (gris)
-- **Icônes** : Utiliser les textures WoW existantes (`Interface\Icons\...`) pour herbes et minerais
-- **Style** : Sobre, non-intrusif, s'intègre à l'UI Blizzard par défaut
+Voir la section dédiée dans `agentwow.md`. Règle : toute nouvelle frame respecte le design language Glimmer sans exception.
+
+- **Palette ressources** : 8 couleurs désaturées (mint, ambre, ciel, rose, lavande, teal, or, rose poudré)
+- **Fond** : `SetColorTexture(0.02, 0.02, 0.03, 0.68)` — verre sur le monde
+- **Pas de** `BackdropTemplate`, pas de chrome WoW, pas de fond coloré
 
 ---
 
@@ -625,11 +463,7 @@ local defaults = {
 
 3. **Export** : WoW ne peut pas écrire directement sur le disque. L'export passe par une **EditBox** dont le contenu est copié manuellement par le joueur (comportement standard pour tous les addons d'export WoW).
 
-4. **TomTom** : Déclaré en `OptionalDeps` dans le .toc. Si absent, le système natif prend le relais automatiquement.
-
-5. **Compatibilité Classic** : Hors scope pour l'instant. Les ItemIDs des ressources sont différents entre Retail et Classic.
-
-6. **Données partagées** : Les routes finales peuvent être distribuées sous forme de strings importables (comme les WeakAuras strings), permettant à la communauté de partager des routes optimisées.
+4. **Compatibilité Classic** : Hors scope pour l'instant. Les ItemIDs des ressources sont différents entre Retail et Classic.
 
 ---
 

@@ -14,6 +14,7 @@ ns.StatsPanel = StatsPanel
 
 local format = string.format
 local math_max = math.max
+local math_floor = math.floor
 
 -- ============================================================
 -- Layout constants

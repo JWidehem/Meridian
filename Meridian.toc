@@ -20,14 +20,7 @@ Core\Meridian.lua
 Core\Database.lua
 Core\Tracker.lua
 Core\Export.lua
-Core\RouteEngine.lua
-
-# Data
-Data\DefaultRoutes.lua
 
 # UI
 UI\MinimapIcon.lua
 UI\StatsPanel.lua
-UI\RoutePanel.lua
-UI\MinimapDrawer.lua
-UI\NavigationArrow.lua

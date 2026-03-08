@@ -49,26 +49,36 @@ function MinimapIcon:Create()
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:RegisterForDrag("LeftButton")
 
+    -- Glimmer: dark translucent background circle
+    local bg = button:CreateTexture(nil, "BACKGROUND")
+    bg:SetSize(ICON_SIZE, ICON_SIZE)
+    bg:SetPoint("CENTER")
+    bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+    bg:SetVertexColor(0.04, 0.04, 0.07, 0.80)
+    button.bg = bg
+
     -- Icon texture
     local icon = button:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(20, 20)
+    icon:SetSize(18, 18)
     icon:SetPoint("CENTER")
     icon:SetTexture("Interface\\MINIMAP\\TRACKING\\None")
     button.icon = icon
 
-    -- Overlay (highlight circle)
+    -- Glimmer: subtle ring border (1px, very dim white)
     local overlay = button:CreateTexture(nil, "OVERLAY")
     overlay:SetSize(ICON_SIZE, ICON_SIZE)
     overlay:SetPoint("CENTER")
     overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    overlay:SetVertexColor(1, 1, 1, 0.35)
     button.overlay = overlay
 
-    -- Highlight
+    -- Glimmer: bright ADD highlight on hover
     local highlight = button:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetSize(ICON_SIZE, ICON_SIZE)
     highlight:SetPoint("CENTER")
     highlight:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
     highlight:SetBlendMode("ADD")
+    highlight:SetVertexColor(1, 1, 1, 0.6)
 
     -- Tooltip
     button:SetScript("OnEnter", function(self)

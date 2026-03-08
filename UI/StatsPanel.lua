@@ -1,7 +1,7 @@
 -- ============================================================
 -- Meridian — Stats Panel (100% Native)
--- Dark macOS-style window : Ores/Herbs tabs, colored bars,
--- export buttons. Design reference: user mockup image.
+-- Design language: Google Glimmer — dark translucent surfaces,
+-- luminous content, desaturated palette, rounded hierarchy.
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
@@ -17,27 +17,28 @@ local math_max = math.max
 -- ============================================================
 -- Constants
 -- ============================================================
-local PANEL_WIDTH = 320
+local PANEL_WIDTH  = 320
 local PANEL_HEIGHT = 420
-local BAR_HEIGHT = 22
-local BAR_SPACING = 4
-local BAR_INSET = 12
-local HEADER_HEIGHT = 50
-local TAB_HEIGHT = 30
+local BAR_HEIGHT   = 20
+local BAR_SPACING  = 5
+local BAR_INSET    = 14
+local HEADER_HEIGHT = 52
+local TAB_HEIGHT   = 28
 local FOOTER_HEIGHT = 56
 
 -- ============================================================
--- Color palette (matches Database.lua)
+-- Glimmer palette — desaturated, pastel-shifted for readability
+-- on transparent AR-style backgrounds
 -- ============================================================
 local COLOR_PALETTE = {
-    { 0.18, 0.80, 0.44 },  -- emerald
-    { 0.95, 0.61, 0.07 },  -- orange
-    { 0.20, 0.60, 0.86 },  -- blue
-    { 0.91, 0.30, 0.24 },  -- red
-    { 0.61, 0.35, 0.71 },  -- purple
-    { 0.10, 0.74, 0.61 },  -- teal
-    { 0.94, 0.76, 0.06 },  -- yellow
-    { 0.83, 0.33, 0.42 },  -- pink
+    { 0.25, 0.78, 0.55 },  -- mint green
+    { 0.88, 0.62, 0.28 },  -- warm amber
+    { 0.35, 0.62, 0.88 },  -- soft blue
+    { 0.85, 0.38, 0.38 },  -- muted red
+    { 0.60, 0.42, 0.78 },  -- lavender
+    { 0.22, 0.72, 0.68 },  -- teal
+    { 0.88, 0.76, 0.28 },  -- soft gold
+    { 0.82, 0.42, 0.62 },  -- dusty rose
 }
 
 -- ============================================================
@@ -52,34 +53,33 @@ local barFrames = {}
 -- CreatePanel
 -- ============================================================
 local function CreateBar(parent, index)
-    local bar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local bar = CreateFrame("Frame", nil, parent)
     bar:SetHeight(BAR_HEIGHT)
 
-    -- Background bar
+    -- Glimmer: dark translucent track
     local bg = bar:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.15, 0.15, 0.20, 0.8)
+    bg:SetColorTexture(1, 1, 1, 0.04)
     bar.bg = bg
 
-    -- Colored fill
+    -- Glimmer: luminous fill, softly saturated
     local fill = bar:CreateTexture(nil, "ARTWORK")
     fill:SetPoint("TOPLEFT", 0, 0)
     fill:SetPoint("BOTTOMLEFT", 0, 0)
     fill:SetHeight(BAR_HEIGHT)
     bar.fill = fill
 
-    -- Name text
+    -- Glimmer: white content on dark surface
     local label = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    label:SetPoint("LEFT", 6, 0)
+    label:SetPoint("LEFT", 8, 0)
     label:SetJustifyH("LEFT")
-    label:SetTextColor(1, 1, 1)
+    label:SetTextColor(0.95, 0.95, 0.95, 1)
     bar.label = label
 
-    -- Count text
     local count = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    count:SetPoint("RIGHT", -6, 0)
+    count:SetPoint("RIGHT", -8, 0)
     count:SetJustifyH("RIGHT")
-    count:SetTextColor(0.8, 0.8, 0.8)
+    count:SetTextColor(0.65, 0.65, 0.70, 1)
     bar.count = count
 
     return bar
@@ -92,7 +92,8 @@ local function SetBarData(bar, name, value, maxValue, colorIndex)
 
     local pct = maxValue > 0 and (value / maxValue) or 0
     bar.fill:SetWidth(math_max(1, (bar:GetWidth() or (PANEL_WIDTH - BAR_INSET * 2)) * pct))
-    bar.fill:SetColorTexture(color[1], color[2], color[3], 0.7)
+    -- Glimmer: fill color with moderate alpha so the dark surface shows through
+    bar.fill:SetColorTexture(color[1], color[2], color[3], 0.55)
     bar:Show()
 end
 
@@ -112,23 +113,33 @@ function StatsPanel:CreatePanel()
 
     panel:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 14,
-        insets   = { left = 4, right = 4, top = 4, bottom = 4 },
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+        insets   = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    panel:SetBackdropColor(0.08, 0.08, 0.10, 0.95)
-    panel:SetBackdropBorderColor(0.25, 0.25, 0.30, 1)
+    -- Glimmer: near-black, high-alpha translucent surface
+    panel:SetBackdropColor(0.04, 0.04, 0.07, 0.85)
+    -- Glimmer: very subtle 1px border, just enough to define the shape
+    panel:SetBackdropBorderColor(1, 1, 1, 0.06)
 
-    -- Header
+    -- Glimmer: thin luminous separator under the header
+    local headerLine = panel:CreateTexture(nil, "ARTWORK")
+    headerLine:SetHeight(1)
+    headerLine:SetPoint("TOPLEFT", 0, -(HEADER_HEIGHT))
+    headerLine:SetPoint("TOPRIGHT", 0, -(HEADER_HEIGHT))
+    headerLine:SetColorTexture(1, 1, 1, 0.08)
+
+    -- Header — title: bright white, high weight
     local headerTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    headerTitle:SetPoint("TOPLEFT", 14, -14)
+    headerTitle:SetPoint("TOPLEFT", 16, -15)
     headerTitle:SetText("Meridian")
-    headerTitle:SetTextColor(0.9, 0.8, 0.2)
+    headerTitle:SetTextColor(1, 1, 1, 1)
     panel.headerTitle = headerTitle
 
+    -- Header — subtitle: dim, secondary hierarchy
     local headerSub = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    headerSub:SetPoint("TOPRIGHT", -14, -18)
-    headerSub:SetTextColor(0.6, 0.6, 0.6)
+    headerSub:SetPoint("TOPRIGHT", -36, -18)
+    headerSub:SetTextColor(0.50, 0.50, 0.55, 1)
     panel.headerSub = headerSub
 
     -- Close button
@@ -146,9 +157,18 @@ function StatsPanel:CreatePanel()
         tab:SetSize(tabWidth, TAB_HEIGHT)
         tab:SetPoint("TOPLEFT", parent, "TOPLEFT", xOff, -(HEADER_HEIGHT + 2))
 
+        -- Glimmer: dark surface tab, gains depth on focus
         local bg = tab:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
         tab.bg = bg
+
+        -- Glimmer: bottom border line to signal focus
+        local focusLine = tab:CreateTexture(nil, "ARTWORK")
+        focusLine:SetHeight(2)
+        focusLine:SetPoint("BOTTOMLEFT", 4, 0)
+        focusLine:SetPoint("BOTTOMRIGHT", -4, 0)
+        focusLine:SetColorTexture(1, 1, 1, 0)
+        tab.focusLine = focusLine
 
         local label = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         label:SetPoint("CENTER")
@@ -193,8 +213,14 @@ function StatsPanel:CreatePanel()
     panel.scrollContent = scrollContent
 
     -- ============================================================
-    -- Footer — Export buttons
+    -- Footer — thin separator + Export buttons
     -- ============================================================
+    local footerLine = panel:CreateTexture(nil, "ARTWORK")
+    footerLine:SetHeight(1)
+    footerLine:SetPoint("BOTTOMLEFT", 0, FOOTER_HEIGHT)
+    footerLine:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT)
+    footerLine:SetColorTexture(1, 1, 1, 0.08)
+
     local btnWidth = (PANEL_WIDTH - BAR_INSET * 2 - 6) / 2
 
     local btnExportAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -225,24 +251,35 @@ end
 -- ============================================================
 function StatsPanel:UpdateTabs()
     if not panel then return end
-    local ore = panel.tabOre
-    local herb = panel.tabHerb
+    local ore   = panel.tabOre
+    local herb  = panel.tabHerb
     local routes = panel.tabRoutes
 
-    -- Routes tab always same style (toggle button)
-    routes.bg:SetColorTexture(0.20, 0.60, 0.86, 0.2)
-    routes.label:SetTextColor(0.20, 0.60, 0.86)
+    -- Glimmer: active tab → surface gains depth (brighter bg), bright label, luminous underline
+    -- Inactive tabs → near-invisible bg, dim label
+    local function setActive(tab, color)
+        tab.bg:SetColorTexture(color[1], color[2], color[3], 0.15)
+        tab.focusLine:SetColorTexture(color[1], color[2], color[3], 0.9)
+        tab.label:SetTextColor(1, 1, 1, 1)
+    end
+    local function setInactive(tab)
+        tab.bg:SetColorTexture(1, 1, 1, 0.02)
+        tab.focusLine:SetColorTexture(1, 1, 1, 0)
+        tab.label:SetTextColor(0.45, 0.45, 0.50, 1)
+    end
+
+    -- Routes tab: always soft blue, unfocused
+    setInactive(routes)
+    routes.bg:SetColorTexture(0.35, 0.62, 0.88, 0.08)
+    routes.focusLine:SetColorTexture(0.35, 0.62, 0.88, 0.5)
+    routes.label:SetTextColor(0.55, 0.72, 0.92, 1)
 
     if activeTab == "ORE" then
-        ore.bg:SetColorTexture(0.95, 0.61, 0.07, 0.3)
-        ore.label:SetTextColor(0.95, 0.61, 0.07)
-        herb.bg:SetColorTexture(0.15, 0.15, 0.20, 0.5)
-        herb.label:SetTextColor(0.5, 0.5, 0.5)
+        setActive(ore,  { 0.88, 0.62, 0.28 })  -- amber
+        setInactive(herb)
     else
-        herb.bg:SetColorTexture(0.18, 0.80, 0.44, 0.3)
-        herb.label:SetTextColor(0.18, 0.80, 0.44)
-        ore.bg:SetColorTexture(0.15, 0.15, 0.20, 0.5)
-        ore.label:SetTextColor(0.5, 0.5, 0.5)
+        setActive(herb, { 0.25, 0.78, 0.55 })  -- mint
+        setInactive(ore)
     end
 end
 

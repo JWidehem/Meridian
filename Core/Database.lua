@@ -16,16 +16,16 @@ local time = time
 local math_abs = math.abs
 local format = string.format
 
--- Palette de couleurs pour les ressources
+-- Palette de couleurs — Glimmer (désaturée, pastels lisibles sur fond sombre)
 local COLOR_PALETTE = {
-    { 0.18, 0.80, 0.44 }, -- vert emeraude
-    { 0.95, 0.77, 0.06 }, -- jaune soleil
-    { 0.20, 0.60, 0.86 }, -- bleu
-    { 0.91, 0.30, 0.24 }, -- rouge
-    { 0.56, 0.27, 0.68 }, -- violet
-    { 0.10, 0.74, 0.61 }, -- turquoise
-    { 0.90, 0.49, 0.13 }, -- orange
-    { 0.83, 0.33, 0.55 }, -- rose
+    { 0.25, 0.78, 0.55 }, -- mint green
+    { 0.88, 0.62, 0.28 }, -- warm amber
+    { 0.35, 0.62, 0.88 }, -- soft blue
+    { 0.85, 0.38, 0.38 }, -- muted red
+    { 0.60, 0.42, 0.78 }, -- lavender
+    { 0.22, 0.72, 0.68 }, -- teal
+    { 0.88, 0.76, 0.28 }, -- soft gold
+    { 0.82, 0.42, 0.62 }, -- dusty rose
 }
 Database.COLOR_PALETTE = COLOR_PALETTE
 

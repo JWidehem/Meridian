@@ -20,17 +20,20 @@ Les **données de combat** sont des valeurs opaques : affichage autorisé, logiq
 **NE PEUT PAS :** comparer (`==`, `<`, `>`), arithmétique, `#` length, clé de table, indexer, appeler comme fonction.
 
 **Bloqué en Midnight :**
+
 - `COMBAT_LOG_EVENT_UNFILTERED` — entièrement retiré, messages convertis en KStrings
 - Cooldowns/buffs adverses utilisés dans une condition
 - Communications addon en instance (`AddOnMessageLockdown`)
 - Santé ennemie dans une condition (`if bossHP < max * 0.2`)
 
 **Autorisé :**
+
 - Tout ce qui est cosmétique (frames, textures, couleurs, position, taille, alpha)
 - Inventaire, crafting, cartes, quêtes, housing, guilde, social (hors combat)
 - Santé/ressources du joueur — affichage uniquement via `SetValue` / `SetMinMaxValues`
 
 **API pour travailler avec des secrets :**
+
 - `Region:SetAlphaFromBoolean(secret)` / `:SetVertexColorFromBoolean(secret)`
 - `C_CurveUtil.CreateColorCurve()` — courbe couleur applicable à des valeurs secrètes
 - `C_DurationUtil.CreateDuration()` → `StatusBar:SetTimerDuration(dur)`
@@ -213,18 +216,19 @@ highlight:SetBlendMode("ADD")                 -- blend mode lumineux
 > **Distribution :** CurseForge / Wago.io — packager BigWigsMods recommandé pour l'automatisation.
 
 _Pour toute API non couverte ici, consulter le wiki avant d'implémenter._
-        if type(v) == "table" then
-            parts[#parts + 1] = prefix .. key .. " = {"
-            parts[#parts + 1] = TableToString(v, indent + 1)
-            parts[#parts + 1] = prefix .. "}"
-        else
-            parts[#parts + 1] = string.format("%s%s = %s", prefix, key, tostring(v))
-        end
-    end
-    return table.concat(parts, "\n")
+if type(v) == "table" then
+parts[#parts + 1] = prefix .. key .. " = {"
+parts[#parts + 1] = TableToString(v, indent + 1)
+parts[#parts + 1] = prefix .. "}"
+else
+parts[#parts + 1] = string.format("%s%s = %s", prefix, key, tostring(v))
+end
+end
+return table.concat(parts, "\n")
 end
 
 -- /run print(TableToString(MonAddon.db.profile))
+
 ```
 
 ---
@@ -313,3 +317,4 @@ end
 ---
 
 _Document maintenu par l'agent spécialiste add-ons WoW. Basé sur la documentation officielle Blizzard (Patch 12.0.1, février 2026) et les communications du WoWUIDev Discord._
+```

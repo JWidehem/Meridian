@@ -41,7 +41,7 @@ Joueur récolte           →    Export JSON des nodes
 
 **Structure d'un node :**
 
-```lua
+````lua
 { itemID=12345, itemName="Midnight Herb", resourceType="HERB",
   mapID=2215, zoneName="Quel'Thalas", subZone="Silvermoon",
   x=45.32, y=67.18, timestamp=1741300000 }
@@ -68,7 +68,7 @@ Joueur récolte           →    Export JSON des nodes
     }
   }
 }
-```
+````
 
 ---
 
@@ -119,7 +119,7 @@ MeridianDB = {
 
 ---
 
-##  Suivi des modifications
+## Suivi des modifications
 
 | Date       | Commit    | Description                                                                     |
 | ---------- | --------- | ------------------------------------------------------------------------------- |

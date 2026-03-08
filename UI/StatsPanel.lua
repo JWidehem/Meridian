@@ -27,6 +27,9 @@ local HEADER_HEIGHT = 50
 local TAB_HEIGHT    = 30
 local FOOTER_HEIGHT = 44
 
+local ZONE_HEADER_HEIGHT  = 18   -- zone section title row
+local ZONE_SECTION_GAP    = 10   -- vertical gap between zones
+
 -- ============================================================
 -- Glimmer palette â€” desaturated, readable on gradient darks
 -- ============================================================
@@ -44,10 +47,48 @@ local COLOR_PALETTE = {
 -- ============================================================
 -- State
 -- ============================================================
-local panel       = nil
-local activeTab   = "ORE"
-local scrollContent = nil
-local barFrames   = {}
+local panel           = nil
+local activeTab       = "ORE"
+local scrollContent   = nil
+local barFrames       = {}   -- reusable bar widgets
+local zoneHdrFrames   = {}   -- reusable zone-header widgets
+
+-- ============================================================
+-- Zone header widget
+-- ============================================================
+local function CreateZoneHeader(parent)
+    local h = CreateFrame("Frame", nil, parent)
+    h:SetHeight(ZONE_HEADER_HEIGHT)
+
+    -- Dim background tint to visually separate zones
+    local bg = h:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(1, 1, 1, 0.04)
+    h.bg = bg
+
+    -- Left accent line — colored to match the active tab
+    local accent = h:CreateTexture(nil, "ARTWORK")
+    accent:SetWidth(2)
+    accent:SetPoint("TOPLEFT",    0,  -2)
+    accent:SetPoint("BOTTOMLEFT", 0,   2)
+    h.accent = accent
+
+    -- Zone name
+    local nameLbl = h:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameLbl:SetPoint("LEFT", 7, 0)
+    nameLbl:SetJustifyH("LEFT")
+    nameLbl:SetTextColor(0.90, 0.90, 0.95, 1)
+    h.nameLbl = nameLbl
+
+    -- Total count right-aligned, dim
+    local totalLbl = h:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    totalLbl:SetPoint("RIGHT", 0, 0)
+    totalLbl:SetJustifyH("RIGHT")
+    totalLbl:SetTextColor(0.48, 0.48, 0.54, 1)
+    h.totalLbl = totalLbl
+
+    return h
+end
 
 -- ============================================================
 -- Bar widget
@@ -291,39 +332,87 @@ function StatsPanel:UpdateTabs()
 end
 
 -- ============================================================
--- Refresh bars
+-- Refresh bars — grouped by zone
 -- ============================================================
 function StatsPanel:RefreshBars()
     if not panel or not panel:IsShown() then return end
     if not Database then return end
 
-    local resources = Database:GetKnownResourcesByType(activeTab)
+    -- Hide all pooled widgets
+    for _, w in ipairs(barFrames)     do w:Hide() end
+    for _, w in ipairs(zoneHdrFrames) do w:Hide() end
 
-    for _, bar in ipairs(barFrames) do bar:Hide() end
+    local zones = Database:GetZoneBreakdownByType(activeTab)
 
-    if #resources == 0 then
+    if #zones == 0 then
         panel.headerSub:SetText(L.NO_DATA)
         return
     end
 
-    table.sort(resources, function(a, b) return a.count > b.count end)
-
-    local maxCount = resources[1].count
     panel.headerSub:SetText(format(L.TOTAL_NODES, Database:GetTotalNodeCount()))
 
-    local contentWidth = scrollContent:GetWidth()
+    -- Current zone for highlight
+    local currentMapID = C_Map.GetBestMapForUnit("player")
 
-    for i, res in ipairs(resources) do
-        if not barFrames[i] then
-            barFrames[i] = CreateBar(scrollContent)
+    -- Tab accent color for zone headers
+    local accentColor = activeTab == "ORE"
+        and { 0.88, 0.62, 0.28 }
+        or  { 0.25, 0.78, 0.55 }
+
+    -- Global max count (across all zones) for proportional bar widths
+    local globalMax = 0
+    for _, zone in ipairs(zones) do
+        for _, res in ipairs(zone.resources) do
+            if res.count > globalMax then globalMax = res.count end
         end
-        local bar = barFrames[i]
-        bar:SetWidth(contentWidth)
-        bar:SetPoint("TOPLEFT", 0, -((i - 1) * (BAR_HEIGHT + BAR_SPACING)))
-        SetBarData(bar, res.name, res.count, maxCount, i)
     end
 
-    scrollContent:SetHeight(#resources * (BAR_HEIGHT + BAR_SPACING))
+    local contentWidth = scrollContent:GetWidth()
+    local yOffset      = 0
+    local hdrIdx       = 0
+    local barIdx       = 0
+
+    for _, zone in ipairs(zones) do
+        -- ── Zone header ──────────────────────────────────────
+        hdrIdx = hdrIdx + 1
+        if not zoneHdrFrames[hdrIdx] then
+            zoneHdrFrames[hdrIdx] = CreateZoneHeader(scrollContent)
+        end
+        local hdr = zoneHdrFrames[hdrIdx]
+        hdr:SetWidth(contentWidth)
+        hdr:SetPoint("TOPLEFT", 0, -yOffset)
+        hdr.nameLbl:SetText(zone.zoneName)
+        hdr.totalLbl:SetText(tostring(zone.totalCount))
+        hdr.accent:SetColorTexture(accentColor[1], accentColor[2], accentColor[3], 0.85)
+
+        -- Highlight current zone header slightly brighter
+        if zone.mapID == currentMapID then
+            hdr.bg:SetColorTexture(accentColor[1], accentColor[2], accentColor[3], 0.10)
+            hdr.nameLbl:SetTextColor(1, 1, 1, 1)
+        else
+            hdr.bg:SetColorTexture(1, 1, 1, 0.04)
+            hdr.nameLbl:SetTextColor(0.90, 0.90, 0.95, 1)
+        end
+        hdr:Show()
+        yOffset = yOffset + ZONE_HEADER_HEIGHT + 3
+
+        -- ── Resource bars for this zone ───────────────────────
+        for _, res in ipairs(zone.resources) do
+            barIdx = barIdx + 1
+            if not barFrames[barIdx] then
+                barFrames[barIdx] = CreateBar(scrollContent)
+            end
+            local bar = barFrames[barIdx]
+            bar:SetWidth(contentWidth)
+            bar:SetPoint("TOPLEFT", 0, -yOffset)
+            SetBarData(bar, res.name, res.count, globalMax, res.colorIndex)
+            yOffset = yOffset + BAR_HEIGHT + BAR_SPACING
+        end
+
+        yOffset = yOffset + ZONE_SECTION_GAP
+    end
+
+    scrollContent:SetHeight(yOffset)
 end
 
 -- ============================================================

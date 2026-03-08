@@ -166,6 +166,54 @@ function Database:GetKnownResourcesByType(resourceType)
     return result
 end
 
+-- Returns zones sorted by total node count desc.
+-- Each zone: { mapID, zoneName, totalCount, resources = [{itemID,name,count,colorIndex}] }
+-- Resources within each zone are sorted by count desc.
+-- Uses C_Map.GetBestMapForUnit("player") to flag the current zone.
+function Database:GetZoneBreakdownByType(resourceType)
+    local zones = {}
+
+    for mapID, zoneNodes in pairs(self.db.nodes) do
+        local byItem   = {}
+        local total    = 0
+        local zoneName = ""
+
+        for _, node in ipairs(zoneNodes) do
+            if node.resourceType == resourceType then
+                local id = node.itemID
+                if not byItem[id] then
+                    local info = self.db.knownResources[id]
+                    byItem[id] = {
+                        itemID     = id,
+                        name       = node.itemName,
+                        count      = 0,
+                        colorIndex = info and info.colorIndex or 1,
+                    }
+                end
+                byItem[id].count = byItem[id].count + 1
+                total    = total + 1
+                zoneName = node.zoneName or zoneName
+            end
+        end
+
+        if total > 0 then
+            local resArray = {}
+            for _, r in pairs(byItem) do resArray[#resArray + 1] = r end
+            table.sort(resArray, function(a, b) return a.count > b.count end)
+
+            zones[#zones + 1] = {
+                mapID      = mapID,
+                zoneName   = zoneName,
+                totalCount = total,
+                resources  = resArray,
+            }
+        end
+    end
+
+    table.sort(zones, function(a, b) return a.totalCount > b.totalCount end)
+    return zones
+end
+
 function Database:GetKnownResources()
     return self.db.knownResources
 end

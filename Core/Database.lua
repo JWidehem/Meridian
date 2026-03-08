@@ -214,6 +214,42 @@ function Database:GetZoneBreakdownByType(resourceType)
     return zones
 end
 
+-- Returns ores, herbs tables for a specific mapID, each sorted by count desc.
+-- Each entry: { itemID, name, count, colorIndex }
+function Database:GetCurrentZoneResources(mapID)
+    local ores  = {}
+    local herbs = {}
+    local zoneNodes = self.db.nodes[mapID]
+    if not zoneNodes then return ores, herbs end
+
+    local byItem = {}
+    for _, node in ipairs(zoneNodes) do
+        local id = node.itemID
+        if not byItem[id] then
+            local info = self.db.knownResources[id]
+            byItem[id] = {
+                itemID     = id,
+                name       = node.itemName,
+                count      = 0,
+                colorIndex = info and info.colorIndex or 1,
+                resType    = node.resourceType,
+            }
+        end
+        byItem[id].count = byItem[id].count + 1
+    end
+
+    for _, r in pairs(byItem) do
+        if r.resType == "ORE" then
+            ores[#ores + 1] = r
+        else
+            herbs[#herbs + 1] = r
+        end
+    end
+    table.sort(ores,  function(a, b) return a.count > b.count end)
+    table.sort(herbs, function(a, b) return a.count > b.count end)
+    return ores, herbs
+end
+
 function Database:GetKnownResources()
     return self.db.knownResources
 end

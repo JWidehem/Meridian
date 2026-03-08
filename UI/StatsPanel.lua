@@ -220,7 +220,7 @@ function StatsPanel:CreatePanel()
     closeBtn:SetScript("OnClick", function() panel:Hide() end)
 
     -- â”€â”€ Tabs (ORE / HERB only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    local tabWidth = (PANEL_WIDTH - BAR_INSET * 2 - 2) / 2
+    local tabWidth = math_floor((PANEL_WIDTH - BAR_INSET * 2) / 3)
     local tabY     = -(HEADER_HEIGHT + 1)
 
     local function CreateTab(text, xOff, tabKey)
@@ -254,8 +254,9 @@ function StatsPanel:CreatePanel()
         return tab
     end
 
-    panel.tabOre  = CreateTab(L.TAB_ORES,  BAR_INSET,                   "ORE")
-    panel.tabHerb = CreateTab(L.TAB_HERBS, BAR_INSET + tabWidth + 2,    "HERB")
+    panel.tabZone = CreateTab(L.TAB_ZONE,  BAR_INSET,                    "ZONE")
+    panel.tabOre  = CreateTab(L.TAB_ORES,  BAR_INSET + tabWidth,         "ORE")
+    panel.tabHerb = CreateTab(L.TAB_HERBS, BAR_INSET + tabWidth * 2,     "HERB")
 
     -- Tab separator line
     local tabLine = panel:CreateTexture(nil, "ARTWORK")
@@ -322,12 +323,18 @@ function StatsPanel:UpdateTabs()
         tab.label:SetTextColor(0.42, 0.42, 0.48, 1)
     end
 
-    if activeTab == "ORE" then
+    if activeTab == "ZONE" then
+        setActive(panel.tabZone, { 0.35, 0.62, 0.88 })  -- sky
+        setInactive(panel.tabOre)
+        setInactive(panel.tabHerb)
+    elseif activeTab == "ORE" then
+        setInactive(panel.tabZone)
         setActive(panel.tabOre,  { 0.88, 0.62, 0.28 })  -- amber
         setInactive(panel.tabHerb)
     else
-        setActive(panel.tabHerb, { 0.25, 0.78, 0.55 })  -- mint
+        setInactive(panel.tabZone)
         setInactive(panel.tabOre)
+        setActive(panel.tabHerb, { 0.25, 0.78, 0.55 })  -- mint
     end
 end
 
@@ -341,6 +348,70 @@ function StatsPanel:RefreshBars()
     -- Hide all pooled widgets
     for _, w in ipairs(barFrames)     do w:Hide() end
     for _, w in ipairs(zoneHdrFrames) do w:Hide() end
+
+    -- ── Zone tab: current zone, ORE + HERB merged ──────────────
+    if activeTab == "ZONE" then
+        local currentMapID = C_Map.GetBestMapForUnit("player")
+        local ores, herbs
+        if currentMapID then
+            ores, herbs = Database:GetCurrentZoneResources(currentMapID)
+        else
+            ores, herbs = {}, {}
+        end
+
+        if #ores == 0 and #herbs == 0 then
+            panel.headerSub:SetText(L.NO_DATA_ZONE)
+            return
+        end
+
+        local mapInfo = C_Map.GetMapInfo(currentMapID)
+        panel.headerSub:SetText(mapInfo and mapInfo.name or "")
+
+        local globalMax = 0
+        for _, r in ipairs(ores)  do if r.count > globalMax then globalMax = r.count end end
+        for _, r in ipairs(herbs) do if r.count > globalMax then globalMax = r.count end end
+
+        local contentWidth = scrollContent:GetWidth()
+        local yOffset = 0
+        local hdrIdx  = 0
+        local barIdx  = 0
+
+        local function renderSection(resources, label, accent)
+            if #resources == 0 then return end
+            hdrIdx = hdrIdx + 1
+            if not zoneHdrFrames[hdrIdx] then
+                zoneHdrFrames[hdrIdx] = CreateZoneHeader(scrollContent)
+            end
+            local hdr = zoneHdrFrames[hdrIdx]
+            hdr:SetWidth(contentWidth)
+            hdr:SetPoint("TOPLEFT", 0, -yOffset)
+            local total = 0
+            for _, r in ipairs(resources) do total = total + r.count end
+            hdr.nameLbl:SetText(label)
+            hdr.totalLbl:SetText(tostring(total))
+            hdr.accent:SetColorTexture(accent[1], accent[2], accent[3], 0.85)
+            hdr.bg:SetColorTexture(accent[1], accent[2], accent[3], 0.08)
+            hdr.nameLbl:SetTextColor(1, 1, 1, 1)
+            hdr:Show()
+            yOffset = yOffset + ZONE_HEADER_HEIGHT + 3
+            for _, res in ipairs(resources) do
+                barIdx = barIdx + 1
+                if not barFrames[barIdx] then barFrames[barIdx] = CreateBar(scrollContent) end
+                local bar = barFrames[barIdx]
+                bar:SetWidth(contentWidth)
+                bar:SetPoint("TOPLEFT", 0, -yOffset)
+                SetBarData(bar, res.name, res.count, globalMax, res.colorIndex)
+                yOffset = yOffset + BAR_HEIGHT + BAR_SPACING
+            end
+            yOffset = yOffset + ZONE_SECTION_GAP
+        end
+
+        renderSection(ores,  L.TAB_ORES,  { 0.88, 0.62, 0.28 })
+        renderSection(herbs, L.TAB_HERBS, { 0.25, 0.78, 0.55 })
+        scrollContent:SetHeight(yOffset)
+        return
+    end
+    -- ───────────────────────────────────────────────────────────
 
     local zones = Database:GetZoneBreakdownByType(activeTab)
 
@@ -463,5 +534,12 @@ end)
 
 Meridian:RegisterCallback("DATA_RESET", function()
     StatsPanel:RefreshBars()
+end)
+
+-- Auto-refresh zone tab when player enters a new area
+local zoneWatcher = CreateFrame("Frame")
+zoneWatcher:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+zoneWatcher:SetScript("OnEvent", function()
+    if activeTab == "ZONE" then StatsPanel:RefreshBars() end
 end)
 

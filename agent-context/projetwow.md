@@ -41,7 +41,7 @@ Joueur ouvre l'HV        →    Scan Auctionator (habituel)
 
 **Enregistrement :** coordonnées via `C_Map.GetBestMapForUnit` + `C_Map.GetPlayerMapPosition`, indexées par `mapID`.
 
-**Interface :** Glimmer Glass (voir `agentwow.md`) — deux onglets ORE/HERB, stats groupées par zone, zone courante mise en évidence, bouton Export for Claude.
+**Interface :** Glimmer Glass (voir `agentwow.md`) — trois onglets : **Zone** (onglet principal, ressources ORE+HERB de la zone courante), **Minerais**, **Plantes** (stats groupées par zone, zone courante mise en évidence). Bouton Export for Claude.
 
 **Commandes slash :** `/mer` (toggle), `/mer export`, `/mer reset`
 

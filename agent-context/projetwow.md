@@ -135,7 +135,7 @@ MeridianDB = {
 | 2026-03-08 | `b3c7096` | Stats groupées par zone — `Database:GetZoneBreakdownByType()` + headers de zone |
 | 2026-03-08 | `16fb580` | Docs : optimisation contexte agent (agentwow 1039→240, projetwow 370→112)       |
 | 2026-03-08 | `6c87606` | Docs : Phase 2 Oracle documentée — vision HV, dépendance Auctionator, scoring   |
-| 2026-03-08 | `41f2e62` | Feat : onglet Zone — ressources ORE+HERB de la zone courante, onglet par défaut  |
+| 2026-03-08 | `41f2e62` | Feat : onglet Zone — ressources ORE+HERB de la zone courante, onglet par défaut |
 | 2026-03-08 | `923fe94` | Fix : `local math_floor` manquant dans StatsPanel                               |
 
 ---

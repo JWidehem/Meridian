@@ -119,23 +119,14 @@ function StatsPanel:CreatePanel()
     panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
     panel:SetClampedToScreen(true)
 
-    -- ── Glimmer background ─────────────────────────────────
-    -- Primary gradient: deep purple left → dark navy right
+    -- ── Glimmer glass surface ──────────────────────────────
+    -- Near-black, semi-transparent: the game world shows through.
+    -- No color — Glimmer has no background color of its own.
+    -- The "colors" seen in Glimmer screenshots are the environment
+    -- bleeding through the translucent surface, not the UI itself.
     local bgTex = panel:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgTex:SetAllPoints()
-    bgTex:SetGradient("HORIZONTAL",
-        CreateColor(0.14, 0.09, 0.22, 0.91),
-        CreateColor(0.05, 0.06, 0.13, 0.93)
-    )
-    -- Secondary vignette: slightly brighter at top, fading down
-    local vignette = panel:CreateTexture(nil, "BACKGROUND", nil, -7)
-    vignette:SetPoint("TOPLEFT")
-    vignette:SetPoint("TOPRIGHT")
-    vignette:SetHeight(PANEL_HEIGHT * 0.45)
-    vignette:SetGradient("VERTICAL",
-        CreateColor(1, 1, 1, 0.04),
-        CreateColor(1, 1, 1, 0.00)
-    )
+    bgTex:SetColorTexture(0.02, 0.02, 0.03, 0.68)
 
     -- ── 1px border (Glimmer: barely-there, just defines shape) ─
     local function MakeBorder(point1, point2, isHoriz)
@@ -168,15 +159,12 @@ function StatsPanel:CreatePanel()
     headerSub:SetTextColor(0.48, 0.48, 0.54, 1)
     panel.headerSub = headerSub
 
-    -- Header separator
+    -- Header separator: neutral white, very dim
     local headerLine = panel:CreateTexture(nil, "ARTWORK")
     headerLine:SetHeight(1)
     headerLine:SetPoint("TOPLEFT",  0, -HEADER_HEIGHT)
     headerLine:SetPoint("TOPRIGHT", 0, -HEADER_HEIGHT)
-    headerLine:SetGradient("HORIZONTAL",
-        CreateColor(1, 1, 1, 0.00),
-        CreateColor(1, 1, 1, 0.12)
-    )
+    headerLine:SetColorTexture(1, 1, 1, 0.10)
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
@@ -244,10 +232,7 @@ function StatsPanel:CreatePanel()
     footerLine:SetHeight(1)
     footerLine:SetPoint("BOTTOMLEFT",  0, FOOTER_HEIGHT)
     footerLine:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT)
-    footerLine:SetGradient("HORIZONTAL",
-        CreateColor(1, 1, 1, 0.12),
-        CreateColor(1, 1, 1, 0.00)
-    )
+    footerLine:SetColorTexture(1, 1, 1, 0.10)
 
     local btnW = (PANEL_WIDTH - BAR_INSET * 2 - 6) / 2
 

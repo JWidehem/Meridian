@@ -212,109 +212,27 @@ highlight:SetBlendMode("ADD")                 -- blend mode lumineux
 
 ---
 
-> **Debug in-game :** `/reload` • `/run <code>` • `/dump <expr>` • `/eventtrace` • `/fstack`  
-> **Distribution :** CurseForge / Wago.io — packager BigWigsMods recommandé pour l'automatisation.
+> **Debug in-game :** `/reload` • `/run <code>` • `/dump <expr>` • `/eventtrace` • `/fstack`
+
+---
+
+## 🔌 Dépendances Tierces — Auctionator (Phase 2)
+
+Auctionator expose une API publique stable pour lire les prix stockés localement après un scan HV :
+
+```lua
+-- Toujours vérifier la présence avant appel (dépendance optionnelle)
+local price = Auctionator and Auctionator.API and Auctionator.API.v1
+    and Auctionator.API.v1.GetAuctionPriceByItemID("Meridian", itemID) or nil
+-- Retourne le prix en cuivre (integer), nil si item inconnu ou Auctionator absent
+-- Disponible n'importe quand — Auctionator stocke localement après chaque scan HV
+```
+
+Déclarer dans le `.toc` :
+```toc
+## OptionalDeps: Auctionator
+```
+
+---
 
 _Pour toute API non couverte ici, consulter le wiki avant d'implémenter._
-if type(v) == "table" then
-parts[#parts + 1] = prefix .. key .. " = {"
-parts[#parts + 1] = TableToString(v, indent + 1)
-parts[#parts + 1] = prefix .. "}"
-else
-parts[#parts + 1] = string.format("%s%s = %s", prefix, key, tostring(v))
-end
-end
-return table.concat(parts, "\n")
-end
-
--- /run print(TableToString(MonAddon.db.profile))
-
-```
-
----
-
-## ✅ Checklist avant Publication
-
-### Conformité Midnight (Critique)
-
-- [ ] Aucune logique conditionnelle basée sur des données de combat en temps réel
-- [ ] Les Secret Values ne sont utilisées que pour l'affichage (SetValue, SetText, etc.)
-- [ ] Pas de lecture de `CombatLog` pour des décisions automatiques
-- [ ] Pas de simulation de rotation ou d'alerte de cooldown automatique en combat
-
-### Qualité du Code
-
-- [ ] Toutes les variables sont locales sauf si explicitement globales
-- [ ] Aucune concaténation de strings dans des boucles serrées
-- [ ] Les updates fréquentes sont throttlées (min 0.1s)
-- [ ] Les tables temporaires sont réutilisées (wipe)
-- [ ] Pas d'accès API dans des boucles à haute fréquence
-
-### Structure
-
-- [ ] Version TOC à jour (`120001` pour Midnight Retail, `50503` pour Classic)
-- [ ] `SavedVariables` correctement déclarés dans le `.toc`
-- [ ] Librairies tierces incluses en tant qu'externals (pas copiées manuellement)
-- [ ] Fichier `.pkgmeta` présent pour le packager automatique
-
-### Internationalisation
-
-- [ ] Toutes les strings affichées passent par AceLocale
-- [ ] Au minimum enUS présent (langue par défaut)
-- [ ] Codes couleurs WoW utilisés (`|cffRRGGBB...|r`) plutôt que hardcodés
-
-### Tests
-
-- [ ] Testé sur un personnage fraîchement connecté
-- [ ] Testé après `/reload`
-- [ ] Testé avec d'autres add-ons populaires (ElvUI, Details!, BigWigs)
-- [ ] Vérifié l'absence de taint avec `/eventtrace`
-- [ ] Vérifié qu'aucune Lua error n'apparaît dans le chat
-
-### Distribution
-
-- [ ] `README.md` avec description, features, installation, screenshot
-- [ ] `CHANGELOG.md` tenu à jour
-- [ ] Tags Git pour chaque release
-- [ ] CI/CD configuré (GitHub Actions + BigWigsMods packager)
-
----
-
-## 🔗 Ressources de Référence
-
-| Ressource                  | URL                                                                         | Usage                                         |
-| -------------------------- | --------------------------------------------------------------------------- | --------------------------------------------- |
-| **Warcraft Wiki API**      | warcraft.wiki.gg/wiki/World_of_Warcraft_API                                 | Référence API principale (mise à jour 12.0.1) |
-| **WoWUIDev Discord**       | discord.gg/wowuidev                                                         | Communauté dev officieuse                     |
-| **WoWHead Guide Lua**      | wowhead.com/guide/comprehensive-beginners-guide-for-wow-addon-coding-in-lua | Tutoriel débutant                             |
-| **Ace3 Docs**              | ace3.wowace.com                                                             | Documentation des librairies Ace              |
-| **GitHub Awesome WoW**     | github.com/JuanjoSalvador/awesome-wow                                       | Liste curatée d'outils                        |
-| **CurseForge**             | curseforge.com/wow                                                          | Distribution principale                       |
-| **Wago.io**                | wago.io                                                                     | Distribution alternative + WeakAuras          |
-| **WoWInterface**           | wowinterface.com                                                            | Distribution alternative                      |
-| **Patch 12.0 API Changes** | warcraft.wiki.gg/wiki/Patch_12.0.0/API_changes                              | Changements officiels Midnight                |
-
----
-
-## 🚀 Exemples de Types d'Add-ons Viables en Midnight
-
-| Catégorie                      | Exemples                      | Compatibilité Secret Values                                    |
-| ------------------------------ | ----------------------------- | -------------------------------------------------------------- |
-| **UI overhaul**                | ElvUI-like, frames custom     | ✅ Totalement compatible                                       |
-| **Nameplate cosmétique**       | Plater-like (skin)            | ✅ Compatible (pas de logique)                                 |
-| **Tracking d'inventaire**      | Gestionnaire de sacs          | ✅ Hors combat, non affecté                                    |
-| **Crafting helper**            | Assistant de métiers          | ✅ Non affecté                                                 |
-| **Housing helper**             | Tracker de déco               | ✅ Non affecté                                                 |
-| **Carte et quêtes**            | Amélioration de carte         | ✅ Non affecté                                                 |
-| **Social / Guilde**            | Gestion de guilde             | ✅ Non affecté                                                 |
-| **Dégâts (post-combat)**       | Parser de logs                | ✅ Via WoWCombatLog.txt                                        |
-| **Boss timers (adapté)**       | BigWigs-like via API Blizzard | ⚠️ Partiellement (Boss Timeline/Warnings natifs)               |
-| **Cooldown tracker**           | Via CooldownManager natif     | ⚠️ Limité aux API autorisées                                   |
-| **Rotation helper**            | WeakAuras-like                | ❌ Non viable en Midnight Retail                               |
-| **Combat automation**          | Scripts de combat             | ❌ Interdit                                                    |
-| **Damage meter (post-combat)** | Details!-like, parsers        | ⚠️ Damage Meter intégré, external parsers via WoWCombatLog.txt |
-
----
-
-_Document maintenu par l'agent spécialiste add-ons WoW. Basé sur la documentation officielle Blizzard (Patch 12.0.1, février 2026) et les communications du WoWUIDev Discord._
-```

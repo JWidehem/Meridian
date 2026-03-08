@@ -10,21 +10,27 @@
 
 ## 🎯 Vision Générale
 
-Meridian est un add-on de collecte de données de nœuds de récolte (herbes et minerais) pour le **farming de ressources** dans World of Warcraft.
+Meridian est un add-on de collecte et d'analyse de nœuds de récolte (herbes et minerais) pour le **farming de ressources** dans World of Warcraft.
 
-Enregistrement silencieux de chaque nœud récolté (type, coordonnées, zone) dans une base de données locale exportable. Interface Glimmer Glass, stats par zone, export JSON pour Claude.
+**Différentiel vs GatherMate/Wowhead :** ces outils se basent sur les spawn points théoriques. Meridian collecte des données **réelles** — uniquement les ressources effectivement récoltées, filtrées naturellement (zones élites, packs de mobs, accès difficiles ignorés).
+
+**Vision finale (Phase 2) :** tu ouvres WoW, tu scannes l'HV avec Auctionator, Meridian croise les prix et ta densité de nœuds et te dit : *"Cette session, va dans Arandar."* Zéro réflexion, farming optimisé entre deux arènes.
 
 ---
 
 ## 🔄 Workflow Global
 
 ```
-[IN-GAME]                          [EXTERNE]
+[PHASE 1 — Collecte]                 [EXTERNE]
 Joueur récolte           →    Export JSON des nodes
   → Node enregistré            → Coller dans Claude
-  → Coordonnées + zone         → Analyse / optimisation
-  → Type de ressource
+  → Coordonnées + zone         → Analyse densité par zone
   → Timestamp
+
+[PHASE 2 — Oracle]
+Joueur ouvre l'HV        →    Scan Auctionator (habituel)
+  → Meridian lit les prix      → Oracle : prix × densité → score
+  → Recommandation de zone     →  "Cette session : Arandar"
 ```
 
 ---
@@ -127,6 +133,47 @@ MeridianDB = {
 | 2026-03-08 | —         | Design language Glimmer Glass (StatsPanel + MinimapIcon)                        |
 | 2026-03-08 | —         | Export unique (Export for Claude), bouton fermer `×` Glimmer                    |
 | 2026-03-08 | `b3c7096` | Stats groupées par zone — `Database:GetZoneBreakdownByType()` + headers de zone |
+| 2026-03-08 | `16fb580` | Docs : optimisation contexte agent (agentwow 1039→240, projetwow 370→112)         |
+| 2026-03-08 | —         | Vision Phase 2 documentée : Oracle de farming (prix HV × densité nœuds)           |
+
+---
+
+## 🔌 Dépendances
+
+| Add-on          | Rôle                                         | Requis pour               |
+| --------------- | -------------------------------------------- | ------------------------- |
+| **Auctionator** | Prix HV locaux via `Auctionator.API.v1`       | Phase 2 Oracle uniquement |
+
+Sans Auctionator installé et à jour, l'Oracle affiche "Auctionator requis" — la Phase 1 fonctionne normalement sans aucune dépendance.
+
+---
+
+## 🔮 Phase 2 — Oracle de Farming
+
+**Objectif :** Recommander la meilleure zone de farming au login, en croisant les prix HV actuels et la densité de nœuds collectée en Phase 1.
+
+### Fonctionnement
+
+1. Tu fais ton scan Auctionator habituel à l'hôtel des ventes
+2. Meridian lit les prix via `Auctionator.API.v1.GetAuctionPriceByItemID("Meridian", itemID)`
+3. Oracle calcule : `score_zone = Σ (prix × nb_noeuds_par_item_dans_zone)`
+4. Recommandation affichée : *"Meilleure zone : Arandar | ORE: Midnight Iron | HERB: Moonbloom"*
+
+### Nouveaux fichiers (Phase 2)
+
+```
+Core/Oracle.lua         ← Calcul score par zone (prix × densité de nœuds)
+UI/OracleWidget.lua     ← Widget Glimmer — recommandation affichée en permanence
+```
+
+### Extension SavedVariables
+
+```lua
+MeridianDB.prices = {
+    -- itemID → { price (cuivres), quantity, timestamp }
+    [12345] = { price = 28000, quantity = 47, timestamp = 1741300000 },
+}
+```
 
 ### État actuel (HEAD : `b3c7096`)
 

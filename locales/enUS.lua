@@ -1,53 +1,38 @@
 local _, ns = ...
 
--- Default locale (enUS) — fallback for all languages
+-- Default locale (enUS) -- fallback for all languages
 local L = {
     -- General
-    ADDON_LOADED   = "Loaded \226\128\148 /mer to open",
+    ADDON_LOADED = "Loaded -- /mer to open",
 
     -- Commands
-    CMD_HELP          = "Commands: /mer \226\128\148 toggle | /mer session \226\128\148 stop session | /mer reset \226\128\148 reset history",
-    CMD_RESET_CONFIRM = "Type /mer reset confirm to erase session history.",
-    CMD_RESET_DONE    = "Session history erased.",
-    CMD_SESSION_HINT  = "Use the Oracle panel to start a session.",
+    CMD_HELP       = "Commands: /mer (toggle) | /mer reset (reset display)",
+    CMD_RESET_DONE = "Display reset.",
 
     -- Oracle
-    ORACLE_RECOMMENDATION = "Recommended zone:",
-    ORACLE_CALCULATE      = "Calculate",
-    ORACLE_RECALCULATE    = "Recalculate",
-    ORACLE_CHOOSE_OTHER   = "Choose other zone",
+    ORACLE_CALCULATE      = "Analyse",
+    ORACLE_RECALCULATE    = "Re-analyse",
+    ORACLE_CHOOSE_OTHER   = "Other zone",
     ORACLE_NO_AUCTIONATOR = "Auctionator required",
-    ORACLE_NOT_CALCULATED = "Not calculated yet",
+    ORACLE_NOT_CALCULATED = "Not analysed yet",
     ORACLE_NO_PRICES      = "No prices available",
     ORACLE_PRICE_DATE     = "Prices from %s",
     ORACLE_NO_DATA        = "No data to calculate.",
 
     -- Session
-    SESSION_STARTED      = "Session started: %s",
-    SESSION_STOPPED      = "Session ended: %s \226\128\148 %s (%s/h)",
-    SESSION_PAUSED       = "Session paused.",
-    SESSION_RESUMED      = "Session resumed.",
-    SESSION_WAITING      = "Waiting for zone: %s \226\128\148 session will start automatically.",
+    SESSION_STARTED       = "Tracking started: %s",
+    SESSION_WAITING       = "Waiting for zone: %s",
     SESSION_WAITING_SHORT = "Waiting: %s",
-    SESSION_IN_PROGRESS  = "Session in progress",
-    SESSION_IN_ZONE      = "Farming: %s",
-    SESSION_NONE         = "No active session",
-    SESSION_PAUSE        = "Pause",
-    SESSION_RESUME       = "Resume",
-    SESSION_STOP         = "Stop",
-    SESSION_PAUSED_SHORT = "paused",
+    SESSION_NONE          = "No active zone",
 
-    -- History
-    HISTORY_TITLE = "Last sessions:",
-    HISTORY_AVG   = "Avg: %s/h",
+    -- Totals
+    LABEL_HERB  = "\230\152\191 Herbs",
+    LABEL_ORE   = "\226\155\143 Ore",
+    RESET_VISUAL = "Reset view",
 
-    -- Tabs
-    TAB_ORACLE_SESSION = "Oracle \194\183 Session",
-    TAB_HISTORY        = "History",
-
-    -- Minimap
-    TOOLTIP_HINT    = "|cffFFFFFFLeft-Click|r open | |cffFFFFFFRight-Click|r pause session",
-    TOOLTIP_WAITING = "Waiting for: %s",
+    -- Minimap tooltip
+    TOOLTIP_HINT    = "|cffFFFFFFLeft-click|r open  |cffFFFFFFRight-click|r stop",
+    TOOLTIP_WAITING = "Waiting: %s",
 }
 
 ns.L = L

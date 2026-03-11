@@ -1,6 +1,6 @@
 ﻿-- ============================================================
--- Meridian â€” Database Module (100% Native)
--- ZoneProfile (densitÃ© figÃ©e Phase 1), sessions historique, cache oracle
+-- Meridian -- Database Module (100% Native)
+-- ZoneProfile (densite figee Phase 1), cumul journalier, cache oracle
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
@@ -8,33 +8,15 @@ local Meridian = ns.addon
 local Database = {}
 ns.Database = Database
 
-local pairs = pairs
-local ipairs = ipairs
-local time   = time
-local format = string.format
+local pairs      = pairs
+local time       = time
 local math_floor = math.floor
 
--- Palette de couleurs Glimmer (dÃ©saturÃ©e, pastels lisibles sur fond sombre)
-local COLOR_PALETTE = {
-    { 0.25, 0.78, 0.55 }, -- mint green
-    { 0.88, 0.62, 0.28 }, -- warm amber
-    { 0.35, 0.62, 0.88 }, -- soft blue
-    { 0.85, 0.38, 0.38 }, -- muted red
-    { 0.60, 0.42, 0.78 }, -- lavender
-    { 0.22, 0.72, 0.68 }, -- teal
-    { 0.88, 0.76, 0.28 }, -- soft gold
-    { 0.82, 0.42, 0.62 }, -- dusty rose
-}
-Database.COLOR_PALETTE = COLOR_PALETTE
-
--- Zones de farming retenues
+-- Zones de farming autorisees (filtrage loot strict)
 Database.FARM_ZONES = {
-    [2395] = "Bois des Chants Ã©ternels",
-    [2405] = "TempÃªte du Vide",
+    [2395] = "Bois des Chants eternels",
+    [2405] = "Tempete du Vide",
 }
-
--- Nombre max de sessions conservÃ©es
-local MAX_SESSIONS = 30
 
 -- ============================================================
 -- Defaults SavedVariables
@@ -44,7 +26,7 @@ local defaults = {
         hide  = false,
         angle = 220,
     },
-    -- Profil de densitÃ© par zone â€” nÅ“uds rÃ©coltÃ©s Phase 1, figÃ©s
+    -- Profil de densite par zone -- noeuds recoltes Phase 1, figes
     -- [mapID] = { [itemID] = count, ... }
     zoneProfile = {
         [2395] = {
@@ -57,13 +39,13 @@ local defaults = {
             [236777]=3,   -- Feuille-d'argent T2
             [236778]=22,  -- Lys de mana T1
             [236780]=1,   -- Lotus nocturne
-            [236949]=4,   -- Particule de LumiÃ¨re
-            [237359]=70,  -- Cuivre Ã©clatant T1
-            [237361]=4,   -- Cuivre Ã©clatant T2
-            [237362]=14,  -- Ã‰tain ombreux T1
+            [236949]=4,   -- Particule de Lumiere
+            [237359]=70,  -- Cuivre eclatant T1
+            [237361]=4,   -- Cuivre eclatant T2
+            [237362]=14,  -- Etain ombreux T1
             [237364]=42,  -- Argent brillant T1
             [237365]=1,   -- Argent brillant T2
-            [237366]=1,   -- Thorium Ã©blouissant
+            [237366]=1,   -- Thorium eblouissant
         },
         [2405] = {
             [236761]=86,  -- Tranquillette T1
@@ -78,10 +60,10 @@ local defaults = {
             [236779]=1,   -- Lys de mana T2
             [236780]=2,   -- Lotus nocturne
             [236952]=4,   -- Particule de Vide pur
-            [237359]=37,  -- Cuivre Ã©clatant T1
-            [237361]=12,  -- Cuivre Ã©clatant T2
-            [237362]=26,  -- Ã‰tain ombreux T1
-            [237363]=7,   -- Ã‰tain ombreux T2
+            [237359]=37,  -- Cuivre eclatant T1
+            [237361]=12,  -- Cuivre eclatant T2
+            [237362]=26,  -- Etain ombreux T1
+            [237363]=7,   -- Etain ombreux T2
             [237364]=17,  -- Argent brillant T1
             [237365]=4,   -- Argent brillant T2
         },
@@ -92,8 +74,14 @@ local defaults = {
         scores          = {},
         priceDate       = nil,
     },
-    -- Historique des sessions terminÃ©es
-    sessions = {},
+    -- Cumul journalier
+    today = {
+        date             = "",   -- "YYYY-MM-DD" du dernier farm
+        goldHerb         = 0,    -- cuivres herbes du jour (brut)
+        goldOre          = 0,    -- cuivres minerais du jour (brut)
+        resetOffsetHerb  = 0,    -- offset reset visuel herbes
+        resetOffsetOre   = 0,    -- offset reset visuel minerais
+    },
 }
 Database.defaults = defaults
 
@@ -102,18 +90,17 @@ Database.defaults = defaults
 -- ============================================================
 Meridian:RegisterCallback("INIT", function()
     Database.db = Meridian.db
+    Database:CheckDayRollover()
 end)
 
 Meridian:RegisterCallback("RESET_ALL", function()
-    Database:ResetSessions()
+    Database:ResetVisual()
     Database:ResetOracle()
 end)
 
 -- ============================================================
--- ZoneProfile â€” lecture seule
+-- ZoneProfile -- lecture seule
 -- ============================================================
-
--- Retourne { [itemID] = count } pour une zone, ou {} si inconnue
 function Database:GetZoneProfile(mapID)
     return self.db.zoneProfile[mapID] or {}
 end
@@ -138,66 +125,45 @@ function Database:ResetOracle()
 end
 
 -- ============================================================
--- Sessions
+-- Cumul journalier
 -- ============================================================
 
--- Sauvegarde une session terminÃ©e
--- data = { mapID, zoneName, duration (sec), goldHerb, goldOre }
-function Database:SaveSession(data)
-    local sessions = self.db.sessions
-    local goldTotal = (data.goldHerb or 0) + (data.goldOre or 0)
-    local goldPerHour = 0
-    if data.duration and data.duration > 0 then
-        goldPerHour = math_floor(goldTotal / data.duration * 3600)
+-- Verifie si le jour a change et remet a zero si necessaire
+function Database:CheckDayRollover()
+    local t = self.db.today
+    local currentDate = date("%Y-%m-%d")
+    if t.date ~= currentDate then
+        t.date            = currentDate
+        t.goldHerb        = 0
+        t.goldOre         = 0
+        t.resetOffsetHerb = 0
+        t.resetOffsetOre  = 0
     end
-
-    local entry = {
-        zoneName    = data.zoneName or "",
-        mapID       = data.mapID,
-        date        = date("%Y-%m-%d"),
-        duration    = data.duration or 0,
-        goldHerb    = data.goldHerb or 0,
-        goldOre     = data.goldOre or 0,
-        goldTotal   = goldTotal,
-        goldPerHour = goldPerHour,
-    }
-
-    sessions[#sessions + 1] = entry
-
-    -- Garde seulement les MAX_SESSIONS derniÃ¨res
-    while #sessions > MAX_SESSIONS do
-        table.remove(sessions, 1)
-    end
-
-    return entry
 end
 
--- Retourne les N derniÃ¨res sessions (du plus rÃ©cent au plus ancien)
-function Database:GetRecentSessions(n)
-    local sessions = self.db.sessions
-    local result = {}
-    local start = math.max(1, #sessions - (n or 5) + 1)
-    for i = #sessions, start, -1 do
-        result[#result + 1] = sessions[i]
+-- Ajoute une valeur au cumul du jour
+function Database:AddLoot(resType, value)
+    self:CheckDayRollover()
+    local t = self.db.today
+    if resType == "HERB" then
+        t.goldHerb = t.goldHerb + value
+    else
+        t.goldOre = t.goldOre + value
     end
-    return result
 end
 
--- Moyenne or/heure sur les N derniÃ¨res sessions
-function Database:GetAverageGoldPerHour(n)
-    local recent = self:GetRecentSessions(n or 5)
-    if #recent == 0 then return 0 end
-    local total = 0
-    for _, s in ipairs(recent) do
-        total = total + s.goldPerHour
-    end
-    return math_floor(total / #recent)
+-- Retourne les valeurs affichees (brut - offset reset visuel)
+-- Retourne deux valeurs : goldHerb_display, goldOre_display
+function Database:GetDisplayTotals()
+    local t = self.db.today
+    return
+        math_floor(math.max(0, t.goldHerb - t.resetOffsetHerb)),
+        math_floor(math.max(0, t.goldOre  - t.resetOffsetOre))
 end
 
-function Database:ResetSessions()
-    self.db.sessions = {}
-end
-
-function Database:GetSessionCount()
-    return #self.db.sessions
+-- Reset visuel : l'affichage repart a zero, le brut en DB est conserve
+function Database:ResetVisual()
+    local t = self.db.today
+    t.resetOffsetHerb = t.goldHerb
+    t.resetOffsetOre  = t.goldOre
 end

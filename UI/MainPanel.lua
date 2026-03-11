@@ -1,15 +1,15 @@
 -- ============================================================
--- Meridian — MainPanel (100% Native, Glimmer Glass)
--- Panneau principal : Oracle → Session → Historique
+-- Meridian -- MainPanel (100% Native, Glimmer Glass)
+-- Design minimaliste : logo M, Oracle, Totaux du jour
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
 local L = ns.L
 
--- Résolution différée via ns — les modules sont enregistrés après le chargement
-local function DB()      return ns.Database end
-local function ORA()     return ns.Oracle   end
-local function SES()     return ns.Session  end
+-- Resolution differee via ns
+local function DB()  return ns.Database end
+local function ORA() return ns.Oracle   end
+local function SES() return ns.Session  end
 
 local MainPanel = {}
 ns.MainPanel = MainPanel
@@ -20,19 +20,18 @@ local format     = string.format
 -- ============================================================
 -- Constantes de layout
 -- ============================================================
-local PANEL_W     = 320
-local PANEL_H     = 270
-local SECTION_PAD = 12
+local PANEL_W     = 220
+local PANEL_H     = 190
+local PAD         = 12
 local LINE_H      = 18
-local UPDATE_RATE = 0.5   -- rafraîchissement du timer (secondes)
+local UPDATE_RATE = 1.0
 
 -- Couleurs Glimmer
-local COLOR_HERB    = { 0.25, 0.78, 0.55 }  -- mint
-local COLOR_ORE     = { 0.88, 0.76, 0.28 }  -- gold
-local COLOR_WARN    = { 0.90, 0.58, 0.35 }  -- orange
-local COLOR_DIM     = { 0.55, 0.55, 0.60 }
-local COLOR_WHITE   = { 1.00, 1.00, 1.00 }
-local COLOR_TITLE   = { 0.85, 0.78, 0.45 }
+local COLOR_HERB  = { 0.25, 0.78, 0.55 }  -- mint
+local COLOR_ORE   = { 0.88, 0.76, 0.28 }  -- gold
+local COLOR_WARN  = { 0.90, 0.58, 0.35 }  -- orange
+local COLOR_DIM   = { 0.55, 0.55, 0.60 }
+local COLOR_WHITE = { 1.00, 1.00, 1.00 }
 
 -- ============================================================
 -- Helpers Glimmer
@@ -58,23 +57,9 @@ local function Label(parent, text, font, r, g, b, a)
     return fs
 end
 
-local function GlimmerCloseButton(frame)
-    local btn = CreateFrame("Button", nil, frame)
-    btn:SetSize(20, 20)
-    btn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -6)
-    local txt = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    txt:SetAllPoints(btn)
-    txt:SetText("×")
-    txt:SetTextColor(1, 1, 1, 0.45)
-    btn:SetScript("OnEnter", function() txt:SetTextColor(1, 1, 1, 0.90) end)
-    btn:SetScript("OnLeave", function() txt:SetTextColor(1, 1, 1, 0.45) end)
-    btn:SetScript("OnClick", function() frame:Hide() end)
-    return btn
-end
-
 local function GlimmerButton(parent, text, w, h)
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(w or 120, h or 22)
+    btn:SetSize(w or 90, h or 20)
     local bg = btn:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(btn)
     bg:SetColorTexture(0.02, 0.02, 0.03, 0.68)
@@ -90,26 +75,14 @@ local function GlimmerButton(parent, text, w, h)
 end
 
 -- ============================================================
--- Formatage or (cuivres → lisible)
+-- Formatage or (cuivres -> lisible)
 -- ============================================================
 local function FormatGold(copper)
     return ORA():FormatGold(copper)
 end
 
--- Durée (secondes) → "Xh Ym" ou "Ym Zs"
-local function FormatDuration(sec)
-    sec = math_floor(sec or 0)
-    if sec >= 3600 then
-        return format("%dh %dm", math_floor(sec/3600), math_floor((sec%3600)/60))
-    elseif sec >= 60 then
-        return format("%dm %ds", math_floor(sec/60), sec%60)
-    else
-        return format("%ds", sec)
-    end
-end
-
 -- ============================================================
--- Création du panneau principal
+-- Creation du panneau
 -- ============================================================
 function MainPanel:Create()
     local frame = CreateFrame("Frame", "MeridianMainPanel", UIParent)
@@ -128,219 +101,131 @@ function MainPanel:Create()
     -- Fond Glimmer
     local bg = frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(frame)
-    bg:SetColorTexture(0.02, 0.02, 0.03, 0.68)
-
-    -- Séparateur haut
-    local topLine = frame:CreateTexture(nil, "BORDER")
-    topLine:SetColorTexture(0.56, 0.85, 0.72, 0.30)
-    topLine:SetHeight(1)
-    topLine:SetPoint("TOPLEFT",  frame, "TOPLEFT",  0, -26)
-    topLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -26)
-
+    bg:SetColorTexture(0.02, 0.02, 0.03, 0.72)
     GlimmerBorder(frame)
-    GlimmerCloseButton(frame)
 
-    -- Titre
-    local title = Label(frame, "Meridian", "GameFontNormalLarge",
-        COLOR_TITLE[1], COLOR_TITLE[2], COLOR_TITLE[3])
-    title:SetPoint("TOPLEFT", frame, "TOPLEFT", SECTION_PAD, -8)
-    self.title = title
-
-    -- --------------------------------------------------------
-    -- Onglets
-    -- --------------------------------------------------------
-    local function MakeTab(text, anchorX)
-        local btn = CreateFrame("Button", nil, frame)
-        btn:SetSize(140, 19)
-        btn:SetPoint("TOPLEFT", frame, "TOPLEFT", anchorX, -27)
-        local lbl = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        lbl:SetPoint("LEFT", btn, "LEFT", 4, 0)
-        lbl:SetText(text)
-        lbl:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-        btn.label = lbl
-        local ind = btn:CreateTexture(nil, "BORDER")
-        ind:SetColorTexture(0.56, 0.85, 0.72, 0)
-        ind:SetHeight(1)
-        ind:SetPoint("BOTTOMLEFT",  btn, "BOTTOMLEFT",  4, 1)
-        ind:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -4, 1)
-        btn.indicator = ind
-        btn:SetScript("OnEnter", function()
-            if btn ~= MainPanel.activeTabBtn then lbl:SetTextColor(0.80, 0.80, 0.82) end
-        end)
-        btn:SetScript("OnLeave", function()
-            if btn ~= MainPanel.activeTabBtn then lbl:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3]) end
-        end)
-        return btn
-    end
-    local tab1Btn = MakeTab(L.TAB_ORACLE_SESSION, SECTION_PAD)
-    local tab2Btn = MakeTab(L.TAB_HISTORY, SECTION_PAD + 144)
-    self.tab1Btn = tab1Btn
-    self.tab2Btn = tab2Btn
-
-    -- Séparateur sous les onglets
-    local tabLine = frame:CreateTexture(nil, "BORDER")
-    tabLine:SetColorTexture(1, 1, 1, 0.07)
-    tabLine:SetHeight(1)
-    tabLine:SetPoint("TOPLEFT",  frame, "TOPLEFT",  0, -46)
-    tabLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -46)
+    -- Ligne sous le header
+    local topLine = frame:CreateTexture(nil, "BORDER")
+    topLine:SetColorTexture(0.56, 0.85, 0.72, 0.20)
+    topLine:SetHeight(1)
+    topLine:SetPoint("TOPLEFT",  frame, "TOPLEFT",  0, -24)
+    topLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -24)
 
     -- --------------------------------------------------------
-    -- Conteneurs d'onglets
+    -- Logo : "M" grand + barre horizontale par-dessus
     -- --------------------------------------------------------
-    local mainContent = CreateFrame("Frame", nil, frame)
-    mainContent:SetPoint("TOPLEFT",     frame, "TOPLEFT",     SECTION_PAD, -50)
-    mainContent:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SECTION_PAD, SECTION_PAD)
-    self.mainContent = mainContent
+    local logoLetter = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    logoLetter:SetText("M")
+    logoLetter:SetTextColor(0.85, 0.78, 0.45)
+    logoLetter:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -4)
+    self.logoLetter = logoLetter
 
-    local histContent = CreateFrame("Frame", nil, frame)
-    histContent:SetPoint("TOPLEFT",     frame, "TOPLEFT",     SECTION_PAD, -50)
-    histContent:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SECTION_PAD, SECTION_PAD)
-    histContent:Hide()
-    self.histContent = histContent
+    -- Barre qui traverse le M (texture 1px haute, positionnee au milieu du glyphe)
+    local logoBar = frame:CreateTexture(nil, "OVERLAY")
+    logoBar:SetColorTexture(0.85, 0.78, 0.45, 0.90)
+    logoBar:SetHeight(2)
+    logoBar:SetWidth(16)
+    logoBar:SetPoint("LEFT", logoLetter, "LEFT", 0, -1)
+    self.logoBar = logoBar
+
+    -- Bouton fermer discret (x en haut a droite)
+    local closeBtn = CreateFrame("Button", nil, frame)
+    closeBtn:SetSize(18, 18)
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -4)
+    local closeTxt = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    closeTxt:SetAllPoints(closeBtn)
+    closeTxt:SetText("x")
+    closeTxt:SetTextColor(1, 1, 1, 0.30)
+    closeBtn:SetScript("OnEnter", function() closeTxt:SetTextColor(1, 1, 1, 0.80) end)
+    closeBtn:SetScript("OnLeave", function() closeTxt:SetTextColor(1, 1, 1, 0.30) end)
+    closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
     -- --------------------------------------------------------
-    -- Section ORACLE (dans mainContent)
+    -- Contenu (sous le header)
     -- --------------------------------------------------------
-    local oracleSection = CreateFrame("Frame", nil, mainContent)
-    oracleSection:SetPoint("TOPLEFT",  mainContent, "TOPLEFT",  0, 0)
-    oracleSection:SetPoint("TOPRIGHT", mainContent, "TOPRIGHT", 0, 0)
-    oracleSection:SetHeight(90)
-    self.oracleSection = oracleSection
+    local content = CreateFrame("Frame", nil, frame)
+    content:SetPoint("TOPLEFT",     frame, "TOPLEFT",     PAD, -28)
+    content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, PAD)
+    self.content = content
 
-    -- Recommandation principale
-    local recoLabel = Label(oracleSection, L.ORACLE_RECOMMENDATION,
-        "GameFontNormalSmall", COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-    recoLabel:SetPoint("TOPLEFT", oracleSection, "TOPLEFT", 0, 0)
-    self.recoLabel = recoLabel
-
-    local recoZone = Label(oracleSection, "—", "GameFontNormalLarge",
-        COLOR_WHITE[1], COLOR_WHITE[2], COLOR_WHITE[3])
-    recoZone:SetPoint("TOPLEFT", oracleSection, "TOPLEFT", 0, -LINE_H)
-    self.recoZone = recoZone
-
-    local recoScore = Label(oracleSection, "", "GameFontNormalSmall",
-        COLOR_HERB[1], COLOR_HERB[2], COLOR_HERB[3])
-    recoScore:SetPoint("TOPLEFT", oracleSection, "TOPLEFT", 0, -LINE_H*2 - 2)
-    self.recoScore = recoScore
-
-    local priceDate = Label(oracleSection, "", "GameFontNormalSmall",
+    -- === Etat ORACLE ===
+    -- Date prix (ligne 1)
+    local priceDate = Label(content, "", "GameFontNormalSmall",
         COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-    priceDate:SetPoint("TOPRIGHT", oracleSection, "TOPRIGHT", 0, -LINE_H*2 - 2)
+    priceDate:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
     self.priceDate = priceDate
 
-    -- Bouton Calculer / Recalculer
-    local calcBtn = GlimmerButton(oracleSection, L.ORACLE_CALCULATE, 130, 22)
-    calcBtn:SetPoint("BOTTOMLEFT", oracleSection, "BOTTOMLEFT", 0, 0)
+    -- Zone recommandee (ligne 2, grande)
+    local recoZone = Label(content, L.ORACLE_NOT_CALCULATED, "GameFontNormal",
+        COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+    recoZone:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -LINE_H)
+    self.recoZone = recoZone
+
+    -- Scores des deux zones (ligne 3, petits)
+    local recoScore = Label(content, "", "GameFontNormalSmall",
+        COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+    recoScore:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -LINE_H*2 - 2)
+    self.recoScore = recoScore
+
+    -- Bouton Analyser / Recalculer
+    local calcBtn = GlimmerButton(content, L.ORACLE_CALCULATE, 90, 20)
+    calcBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -LINE_H*3 - 6)
     calcBtn:SetScript("OnClick", function() MainPanel:OnCalcClick() end)
     self.calcBtn = calcBtn
 
-    -- Bouton "Choisir l'autre zone"
-    local altBtn = GlimmerButton(oracleSection, L.ORACLE_CHOOSE_OTHER, 150, 22)
-    altBtn:SetPoint("BOTTOMRIGHT", oracleSection, "BOTTOMRIGHT", 0, 0)
+    -- Bouton Autre zone (meme ligne, a droite)
+    local altBtn = GlimmerButton(content, L.ORACLE_CHOOSE_OTHER, 100, 20)
+    altBtn:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -LINE_H*3 - 6)
     altBtn:SetScript("OnClick", function() MainPanel:OnAltZoneClick() end)
+    altBtn:Hide()
     self.altBtn = altBtn
 
-    -- --------------------------------------------------------
-    -- Séparateur
-    -- --------------------------------------------------------
-    local sep1 = mainContent:CreateTexture(nil, "BORDER")
-    sep1:SetColorTexture(1, 1, 1, 0.07)
-    sep1:SetHeight(1)
-    sep1:SetPoint("TOPLEFT",  oracleSection, "BOTTOMLEFT",  0, -6)
-    sep1:SetPoint("TOPRIGHT", oracleSection, "BOTTOMRIGHT", 0, -6)
+    -- Separateur entre Oracle et totaux
+    local sep = content:CreateTexture(nil, "BORDER")
+    sep:SetColorTexture(1, 1, 1, 0.07)
+    sep:SetHeight(1)
+    sep:SetPoint("TOPLEFT",  content, "TOPLEFT",  0, -LINE_H*3 - 32)
+    sep:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -LINE_H*3 - 32)
+    self.sep = sep
 
-    -- --------------------------------------------------------
-    -- Section SESSION (dans mainContent)
-    -- --------------------------------------------------------
-    local sessionSection = CreateFrame("Frame", nil, mainContent)
-    sessionSection:SetPoint("TOPLEFT",  oracleSection, "BOTTOMLEFT",  0, -14)
-    sessionSection:SetPoint("TOPRIGHT", oracleSection, "BOTTOMRIGHT", 0, -14)
-    sessionSection:SetHeight(80)
-    self.sessionSection = sessionSection
-
-    local sessionHeader = Label(sessionSection, L.SESSION_IN_PROGRESS,
-        "GameFontNormalSmall", COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-    sessionHeader:SetPoint("TOPLEFT", sessionSection, "TOPLEFT", 0, 0)
-    self.sessionHeader = sessionHeader
-
-    local timerLabel = Label(sessionSection, "—", "GameFontNormal",
-        COLOR_WHITE[1], COLOR_WHITE[2], COLOR_WHITE[3])
-    timerLabel:SetPoint("TOPLEFT", sessionSection, "TOPLEFT", 0, -LINE_H)
-    self.timerLabel = timerLabel
-
-    local gphLabel = Label(sessionSection, "", "GameFontNormalSmall",
-        COLOR_ORE[1], COLOR_ORE[2], COLOR_ORE[3])
-    gphLabel:SetPoint("TOPLEFT", sessionSection, "TOPLEFT", 0, -LINE_H*2)
-    self.gphLabel = gphLabel
-
-    local breakdownLabel = Label(sessionSection, "", "GameFontNormalSmall",
+    -- === Totaux du jour ===
+    -- Libelle zone active ou "Aucune session"
+    local zoneLabel = Label(content, L.SESSION_NONE, "GameFontNormalSmall",
         COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-    breakdownLabel:SetPoint("TOPRIGHT", sessionSection, "TOPRIGHT", 0, -LINE_H*2)
-    self.breakdownLabel = breakdownLabel
+    zoneLabel:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -LINE_H*3 - 40)
+    self.zoneLabel = zoneLabel
 
-    -- Bouton Pause/Reprendre
-    local pauseBtn = GlimmerButton(sessionSection, L.SESSION_PAUSE, 120, 22)
-    pauseBtn:SetPoint("BOTTOMLEFT", sessionSection, "BOTTOMLEFT", 0, 0)
-    pauseBtn:SetScript("OnClick", function() SES():TogglePause() end)
-    self.pauseBtn = pauseBtn
+    -- Total herbes (ligne distincte, mint)
+    local herbLabel = Label(content, "", "GameFontNormal",
+        COLOR_HERB[1], COLOR_HERB[2], COLOR_HERB[3])
+    herbLabel:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -LINE_H*4 - 40)
+    self.herbLabel = herbLabel
 
-    -- Bouton Stop
-    local stopBtn = GlimmerButton(sessionSection, L.SESSION_STOP, 90, 22)
-    stopBtn:SetPoint("BOTTOMRIGHT", sessionSection, "BOTTOMRIGHT", 0, 0)
-    stopBtn:SetScript("OnClick", function()
-        SES():Stop()
-        MainPanel:Refresh()
+    -- Total minerais (ligne distincte, gold)
+    local oreLabel = Label(content, "", "GameFontNormal",
+        COLOR_ORE[1], COLOR_ORE[2], COLOR_ORE[3])
+    oreLabel:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -LINE_H*5 - 40)
+    self.oreLabel = oreLabel
+
+    -- Bouton reset visuel (tres discret, en bas a droite)
+    local resetBtn = GlimmerButton(content, L.RESET_VISUAL, 70, 16)
+    resetBtn:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", 0, 0)
+    resetBtn.label:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+    resetBtn:SetScript("OnClick", function()
+        DB():ResetVisual()
+        MainPanel:RefreshTotals()
     end)
-    self.stopBtn = stopBtn
+    self.resetBtn = resetBtn
 
     -- --------------------------------------------------------
-    -- Section HISTORIQUE (dans histContent)
-    -- --------------------------------------------------------
-    local histSection = CreateFrame("Frame", nil, histContent)
-    histSection:SetPoint("TOPLEFT",     histContent, "TOPLEFT",     0, 0)
-    histSection:SetPoint("BOTTOMRIGHT", histContent, "BOTTOMRIGHT", 0, 0)
-    self.histSection = histSection
-
-    local histHeader = Label(histSection, L.HISTORY_TITLE,
-        "GameFontNormalSmall", COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-    histHeader:SetPoint("TOPLEFT", histSection, "TOPLEFT", 0, 0)
-    self.histHeader = histHeader
-
-    -- 5 lignes d'historique
-    self.histLines = {}
-    for i = 1, 5 do
-        local line = Label(histSection, "", "GameFontNormalSmall",
-            COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-        line:SetPoint("TOPLEFT", histSection, "TOPLEFT", 0, -(i) * LINE_H)
-        self.histLines[i] = line
-    end
-
-    local avgLabel = Label(histSection, "", "GameFontNormalSmall",
-        COLOR_WHITE[1], COLOR_WHITE[2], COLOR_WHITE[3])
-    avgLabel:SetPoint("TOPLEFT", histSection, "TOPLEFT", 0, -6 * LINE_H)
-    self.avgLabel = avgLabel
-
-    -- --------------------------------------------------------
-    -- Initialisation des onglets
-    -- --------------------------------------------------------
-    self.activeTab = 1
-    self.activeTabBtn = tab1Btn
-    tab1Btn.label:SetTextColor(1, 1, 1, 0.90)
-    tab1Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0.70)
-    tab1Btn:SetScript("OnClick", function() MainPanel:SwitchTab(1) end)
-    tab2Btn:SetScript("OnClick", function() MainPanel:SwitchTab(2) end)
-
-    -- --------------------------------------------------------
-    -- Timer de mise à jour
+    -- Timer de mise a jour des totaux
     -- --------------------------------------------------------
     local elapsed = 0
     frame:SetScript("OnUpdate", function(self, dt)
         elapsed = elapsed + dt
         if elapsed < UPDATE_RATE then return end
         elapsed = 0
-        if MainPanel.activeTab ~= 2 then
-            MainPanel:RefreshSession()
-        end
+        MainPanel:RefreshTotals()
     end)
 
     self:Refresh()
@@ -351,162 +236,86 @@ end
 -- Refresh complet
 -- ============================================================
 function MainPanel:Refresh()
-    if self.activeTab == 2 then
-        self:RefreshHistory()
-    else
-        self:RefreshOracle()
-        self:RefreshSession()
-    end
+    self:RefreshOracle()
+    self:RefreshTotals()
 end
 
 -- ============================================================
--- Commutation d'onglet
--- ============================================================
-function MainPanel:SwitchTab(n)
-    self.activeTab = n
-    if n == 1 then
-        self.mainContent:Show()
-        self.histContent:Hide()
-        self.activeTabBtn = self.tab1Btn
-        self.tab1Btn.label:SetTextColor(1, 1, 1, 0.90)
-        self.tab1Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0.70)
-        self.tab2Btn.label:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-        self.tab2Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0)
-        self:RefreshOracle()
-        self:RefreshSession()
-    else
-        self.mainContent:Hide()
-        self.histContent:Show()
-        self.activeTabBtn = self.tab2Btn
-        self.tab1Btn.label:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-        self.tab1Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0)
-        self.tab2Btn.label:SetTextColor(1, 1, 1, 0.90)
-        self.tab2Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0.70)
-        self:RefreshHistory()
-    end
-end
-
--- ============================================================
--- Refresh section Oracle
+-- Refresh Oracle
 -- ============================================================
 function MainPanel:RefreshOracle()
-    local oracle = DB():GetOracleResult()
+    local oracle      = DB():GetOracleResult()
     local isAvailable = ORA():IsAuctionatorAvailable()
 
+    -- Date prix
+    self.priceDate:SetText(ORA():GetPriceDateLabel())
+
+    -- Zone recommandee
     if oracle.recommendedZone then
         local zoneName = ORA().ZONE_NAMES[oracle.recommendedZone] or "?"
         self.recoZone:SetText(zoneName)
         self.recoZone:SetTextColor(COLOR_HERB[1], COLOR_HERB[2], COLOR_HERB[3])
 
-        local scoreParts = {}
+        -- Scores : "Tempete 11495g  |  Bois 10086g"
+        local parts = {}
         for mapID, score in pairs(oracle.scores) do
-            local name = (ORA().ZONE_NAMES[mapID] or "?"):match("^(.-)%s") or "?"
-            scoreParts[#scoreParts + 1] = name .. " " .. FormatGold(score)
+            local shortName = (ORA().ZONE_NAMES[mapID] or "?"):match("^(%S+)") or "?"
+            parts[#parts + 1] = shortName .. " " .. FormatGold(score)
         end
-        self.recoScore:SetText(table.concat(scoreParts, "  |  "))
+        self.recoScore:SetText(table.concat(parts, "  |  "))
+        self.recoScore:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+
+        self.altBtn:SetShown(not SES():IsActive())
     elseif not isAvailable then
         self.recoZone:SetText(L.ORACLE_NO_AUCTIONATOR)
         self.recoZone:SetTextColor(COLOR_WARN[1], COLOR_WARN[2], COLOR_WARN[3])
         self.recoScore:SetText("")
+        self.altBtn:Hide()
     else
         self.recoZone:SetText(L.ORACLE_NOT_CALCULATED)
         self.recoZone:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
         self.recoScore:SetText("")
+        self.altBtn:Hide()
     end
 
-    self.priceDate:SetText(ORA():GetPriceDateLabel())
+    -- Label bouton
     self.calcBtn.label:SetText(oracle.priceDate and L.ORACLE_RECALCULATE or L.ORACLE_CALCULATE)
-
-    local showAlt = oracle.recommendedZone ~= nil and not SES():IsActive()
-    self.altBtn:SetShown(showAlt)
 end
 
 -- ============================================================
--- Refresh section Session
+-- Refresh totaux du jour
 -- ============================================================
-function MainPanel:RefreshSession()
-    local isActive  = SES():IsActive()
-    local isPaused  = SES():IsPaused()
-    local isWaiting = SES():IsWaiting()
-
-    if isWaiting then
-        local waitZone = ORA().ZONE_NAMES[SES():GetWaitingZone()] or "?"
-        self.sessionHeader:SetText(format(L.SESSION_WAITING_SHORT, waitZone))
-        self.timerLabel:SetText("—")
-        self.gphLabel:SetText("")
-        self.breakdownLabel:SetText("")
-        self.pauseBtn:Hide()
-        self.stopBtn:Hide()
-        return
-    end
-
-    if not isActive then
-        self.sessionHeader:SetText(L.SESSION_NONE)
-        self.timerLabel:SetText("—")
-        self.gphLabel:SetText("")
-        self.breakdownLabel:SetText("")
-        self.pauseBtn:Hide()
-        self.stopBtn:Hide()
-        return
-    end
-
-    local elapsed  = SES():GetElapsed()
-    local gph      = SES():GetGoldPerHour()
-    local goldHerb = SES().state.goldHerb
-    local goldOre  = SES().state.goldOre
-    local zoneName = SES().state.zoneName
-
-    self.sessionHeader:SetText(format(L.SESSION_IN_ZONE, zoneName))
-    self.timerLabel:SetText(FormatDuration(elapsed) .. (isPaused and " (" .. L.SESSION_PAUSED_SHORT .. ")" or ""))
-    self.gphLabel:SetText(FormatGold(gph) .. "/h")
-    self.breakdownLabel:SetText(
-        "|cff" .. string.format("%02x%02x%02x", COLOR_HERB[1]*255, COLOR_HERB[2]*255, COLOR_HERB[3]*255)
-        .. "☕|r " .. FormatGold(goldHerb)
-        .. "  |cff" .. string.format("%02x%02x%02x", COLOR_ORE[1]*255, COLOR_ORE[2]*255, COLOR_ORE[3]*255)
-        .. "⛏|r " .. FormatGold(goldOre)
-    )
-
-    self.pauseBtn:Show()
-    self.stopBtn:Show()
-    self.pauseBtn.label:SetText(isPaused and L.SESSION_RESUME or L.SESSION_PAUSE)
-end
-
--- ============================================================
--- Refresh section Historique
--- ============================================================
-function MainPanel:RefreshHistory()
-    local sessions = DB():GetRecentSessions(5)
-    local avg      = DB():GetAverageGoldPerHour(5)
-
-    local SHORT = { [2395] = "BCE", [2405] = "TdV" }
-
-    for i = 1, 5 do
-        local s = sessions[i]
-        if s then
-            local shortName = SHORT[s.mapID] or s.zoneName:sub(1, 3)
-            local line = format("%s · %s · ☕%s ⛏%s",
-                shortName,
-                FormatDuration(s.duration),
-                FormatGold(s.goldHerb),
-                FormatGold(s.goldOre)
-            )
-            self.histLines[i]:SetText(line)
-            self.histLines[i]:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
-        else
-            self.histLines[i]:SetText("")
-        end
-    end
-
-    if avg > 0 then
-        self.avgLabel:SetText(format(L.HISTORY_AVG, FormatGold(avg)))
-        self.avgLabel:SetTextColor(COLOR_WHITE[1], COLOR_WHITE[2], COLOR_WHITE[3])
+function MainPanel:RefreshTotals()
+    local ses = SES()
+    if ses:IsActive() then
+        self.zoneLabel:SetText(ses.state.zoneName)
+        self.zoneLabel:SetTextColor(COLOR_HERB[1], COLOR_HERB[2], COLOR_HERB[3])
+    elseif ses:IsWaiting() then
+        local waitZone = ORA().ZONE_NAMES[ses:GetWaitingZone()] or "?"
+        self.zoneLabel:SetText(format(L.SESSION_WAITING_SHORT, waitZone))
+        self.zoneLabel:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
     else
-        self.avgLabel:SetText("")
+        self.zoneLabel:SetText(L.SESSION_NONE)
+        self.zoneLabel:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+    end
+
+    local herbVal, oreVal = DB():GetDisplayTotals()
+
+    if herbVal > 0 then
+        self.herbLabel:SetText(L.LABEL_HERB .. " " .. FormatGold(herbVal))
+    else
+        self.herbLabel:SetText(L.LABEL_HERB .. " —")
+    end
+
+    if oreVal > 0 then
+        self.oreLabel:SetText(L.LABEL_ORE .. " " .. FormatGold(oreVal))
+    else
+        self.oreLabel:SetText(L.LABEL_ORE .. " —")
     end
 end
 
 -- ============================================================
--- Actions boutons
+-- Actions boutons Oracle
 -- ============================================================
 function MainPanel:OnCalcClick()
     if not ORA():IsAuctionatorAvailable() then
@@ -519,9 +328,9 @@ function MainPanel:OnCalcClick()
         return
     end
     self:RefreshOracle()
-    local recommended = results[1].mapID
-    SES():WaitForZone(recommended)
-    self:RefreshSession()
+    -- Demarrer (ou attendre) la zone recommandee
+    SES():WaitForZone(results[1].mapID)
+    self:RefreshTotals()
 end
 
 function MainPanel:OnAltZoneClick()
@@ -538,11 +347,12 @@ function MainPanel:OnAltZoneClick()
     if not altMapID then return end
 
     SES():WaitForZone(altMapID)
-    self:RefreshSession()
+    self:RefreshOracle()
+    self:RefreshTotals()
 end
 
 -- ============================================================
--- Toggle
+-- Toggle / Show
 -- ============================================================
 function MainPanel:Toggle()
     if self.frame:IsShown() then
@@ -577,6 +387,10 @@ Meridian:RegisterCallback("SESSION_STOPPED", function()
     MainPanel:Refresh()
 end)
 
-Meridian:RegisterCallback("SESSION_STATE_CHANGED", function()
-    MainPanel:RefreshSession()
+Meridian:RegisterCallback("SESSION_WAITING_CHANGED", function()
+    MainPanel:RefreshTotals()
+end)
+
+Meridian:RegisterCallback("SESSION_LOOT_ADDED", function()
+    MainPanel:RefreshTotals()
 end)

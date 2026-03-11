@@ -1,12 +1,14 @@
--- ============================================================
--- Meridian — Oracle Module (100% Native)
--- Calcul du score de rentabilité par zone via Auctionator
+﻿-- ============================================================
+-- Meridian â€” Oracle Module (100% Native)
+-- Calcul du score de rentabilitÃ© par zone via Auctionator
 -- Zones retenues : BCE (2395) et TdV (2405)
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
-local Database = ns.Database
 local L = ns.L
+
+-- Resolution differee
+local function DB() return ns.Database end
 
 local Oracle = {}
 ns.Oracle = Oracle
@@ -16,15 +18,15 @@ local math_floor = math.floor
 local time       = time
 local date       = date
 
--- Noms des zones affichés (court)
+-- Noms des zones affichÃ©s (court)
 local ZONE_NAMES = {
-    [2395] = "Bois des Chants éternels",
-    [2405] = "Tempête du Vide",
+    [2395] = "Bois des Chants Ã©ternels",
+    [2405] = "TempÃªte du Vide",
 }
 Oracle.ZONE_NAMES = ZONE_NAMES
 
 -- ============================================================
--- Lecture prix Auctionator (dépendance optionnelle)
+-- Lecture prix Auctionator (dÃ©pendance optionnelle)
 -- ============================================================
 
 -- Retourne le prix en cuivres, ou nil si inconnu / Auctionator absent
@@ -45,14 +47,14 @@ end
 -- Calcul du score par zone
 -- ============================================================
 
--- Retourne un tableau de résultats triés, du plus rentable au moins rentable :
+-- Retourne un tableau de rÃ©sultats triÃ©s, du plus rentable au moins rentable :
 -- { { mapID, zoneName, score, missingPrices, itemsScored } }
 -- score est en cuivres
 function Oracle:Calculate()
     local results = {}
 
     for mapID, zoneName in pairs(ZONE_NAMES) do
-        local profile     = Database:GetZoneProfile(mapID)
+        local profile     = DB():GetZoneProfile(mapID)
         local score       = 0
         local itemsScored = 0
         local missing     = {}
@@ -86,18 +88,18 @@ function Oracle:Calculate()
     end
 
     local recommended = results[1] and results[1].mapID
-    Database:SaveOracleResult(recommended, scores, time())
+    DB():SaveOracleResult(recommended, scores, time())
 
     return results
 end
 
 -- ============================================================
--- Formatage de l'âge des prix pour l'affichage
+-- Formatage de l'Ã¢ge des prix pour l'affichage
 -- ============================================================
 
--- Retourne une chaîne lisible : "Prix du 11/03" ou "Prix non disponibles"
+-- Retourne une chaÃ®ne lisible : "Prix du 11/03" ou "Prix non disponibles"
 function Oracle:GetPriceDateLabel()
-    local oracle = Database:GetOracleResult()
+    local oracle = DB():GetOracleResult()
     if not oracle.priceDate then
         return L.ORACLE_NO_PRICES
     end
@@ -105,7 +107,7 @@ function Oracle:GetPriceDateLabel()
 end
 
 -- ============================================================
--- Formatage or pour affichage (cuivres → "X 987g 65a 43c")
+-- Formatage or pour affichage (cuivres â†’ "X 987g 65a 43c")
 -- ============================================================
 function Oracle:FormatGold(copper)
     if not copper or copper == 0 then return "0g" end
@@ -125,5 +127,5 @@ end
 -- Init
 -- ============================================================
 Meridian:RegisterCallback("INIT", function()
-    -- Rien à initialiser — Oracle calcule à la demande
+    -- Rien Ã  initialiser â€” Oracle calcule Ã  la demande
 end)

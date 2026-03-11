@@ -86,21 +86,29 @@ function MinimapIcon:Create()
         GameTooltip:ClearLines()
         GameTooltip:AddLine("Meridian", 0.9, 0.8, 0.2)
 
-        local Session = ns.Session
-        if Session and Session:IsActive() then
-            local Oracle = ns.Oracle
-            local gph = Session:GetGoldPerHour()
-            GameTooltip:AddLine(Oracle:FormatGold(gph) .. "/h", 1, 1, 1)
-            GameTooltip:AddLine(Session.state.zoneName, 0.7, 0.7, 0.7)
-        elseif Session and Session:IsWaiting() then
-            local Oracle = ns.Oracle
-            local waitZone = Oracle.ZONE_NAMES[Session:GetWaitingZone()] or "?"
-            GameTooltip:AddLine(string.format(L.TOOLTIP_WAITING, waitZone), 0.7, 0.7, 0.7)
-        else
-            local oracle = ns.Database and ns.Database:GetOracleResult()
+        local ses = ns.Session
+        local ora = ns.Oracle
+        local db  = ns.Database
+
+        if ses and ses:IsActive() then
+            GameTooltip:AddLine(ses.state.zoneName, 0.56, 0.85, 0.72)
+            if db and ora then
+                local h, o = db:GetDisplayTotals()
+                if h > 0 then
+                    GameTooltip:AddLine("Herbes : " .. ora:FormatGold(h), 0.25, 0.78, 0.55)
+                end
+                if o > 0 then
+                    GameTooltip:AddLine("Minerais : " .. ora:FormatGold(o), 0.88, 0.76, 0.28)
+                end
+            end
+        elseif ses and ses:IsWaiting() and ora then
+            local waitZone = ora.ZONE_NAMES[ses:GetWaitingZone()] or "?"
+            GameTooltip:AddLine(L.TOOLTIP_WAITING:format(waitZone), 0.7, 0.7, 0.7)
+        elseif db and ora then
+            local oracle = db:GetOracleResult()
             if oracle and oracle.recommendedZone then
-                local zoneName = ns.Oracle.ZONE_NAMES[oracle.recommendedZone] or "?"
-                GameTooltip:AddLine("→ " .. zoneName, 0.56, 0.85, 0.72)
+                local zoneName = ora.ZONE_NAMES[oracle.recommendedZone] or "?"
+                GameTooltip:AddLine(zoneName, 0.56, 0.85, 0.72)
             end
         end
 
@@ -112,9 +120,10 @@ function MinimapIcon:Create()
     -- Clicks
     button:SetScript("OnClick", function(self, btn)
         if btn == "RightButton" then
+            -- clic droit : stop session active
             local ses = ns.Session
             if ses and ses:IsActive() then
-                ses:TogglePause()
+                ses:Stop()
             end
         else
             if ns.MainPanel then

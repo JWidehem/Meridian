@@ -108,22 +108,9 @@ SlashCmdList["MERIDIAN"] = function(input)
     if cmd == "" then
         Meridian:FireCallback("TOGGLE_PANEL")
 
-    elseif cmd == "session" then
-        local Session = ns.Session
-        if Session then
-            if Session:IsActive() then
-                Session:Stop()
-            else
-                Meridian:Msg(L.CMD_SESSION_HINT)
-            end
-        end
-
-    elseif cmd == "reset confirm" then
+    elseif cmd == "reset" then
         Meridian:FireCallback("RESET_ALL")
         Meridian:Msg(L.CMD_RESET_DONE)
-
-    elseif cmd == "reset" then
-        Meridian:Msg(L.CMD_RESET_CONFIRM)
 
     else
         Meridian:Msg(L.CMD_HELP)

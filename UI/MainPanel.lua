@@ -21,7 +21,7 @@ local format     = string.format
 -- Constantes de layout
 -- ============================================================
 local PANEL_W     = 320
-local PANEL_H     = 320
+local PANEL_H     = 270
 local SECTION_PAD = 12
 local LINE_H      = 18
 local UPDATE_RATE = 0.5   -- rafraîchissement du timer (secondes)
@@ -147,11 +147,63 @@ function MainPanel:Create()
     self.title = title
 
     -- --------------------------------------------------------
-    -- Section ORACLE
+    -- Onglets
     -- --------------------------------------------------------
-    local oracleSection = CreateFrame("Frame", nil, frame)
-    oracleSection:SetPoint("TOPLEFT",  frame, "TOPLEFT",  SECTION_PAD, -32)
-    oracleSection:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -SECTION_PAD, -32)
+    local function MakeTab(text, anchorX)
+        local btn = CreateFrame("Button", nil, frame)
+        btn:SetSize(140, 19)
+        btn:SetPoint("TOPLEFT", frame, "TOPLEFT", anchorX, -27)
+        local lbl = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        lbl:SetPoint("LEFT", btn, "LEFT", 4, 0)
+        lbl:SetText(text)
+        lbl:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+        btn.label = lbl
+        local ind = btn:CreateTexture(nil, "BORDER")
+        ind:SetColorTexture(0.56, 0.85, 0.72, 0)
+        ind:SetHeight(1)
+        ind:SetPoint("BOTTOMLEFT",  btn, "BOTTOMLEFT",  4, 1)
+        ind:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -4, 1)
+        btn.indicator = ind
+        btn:SetScript("OnEnter", function()
+            if btn ~= MainPanel.activeTabBtn then lbl:SetTextColor(0.80, 0.80, 0.82) end
+        end)
+        btn:SetScript("OnLeave", function()
+            if btn ~= MainPanel.activeTabBtn then lbl:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3]) end
+        end)
+        return btn
+    end
+    local tab1Btn = MakeTab(L.TAB_ORACLE_SESSION, SECTION_PAD)
+    local tab2Btn = MakeTab(L.TAB_HISTORY, SECTION_PAD + 144)
+    self.tab1Btn = tab1Btn
+    self.tab2Btn = tab2Btn
+
+    -- Séparateur sous les onglets
+    local tabLine = frame:CreateTexture(nil, "BORDER")
+    tabLine:SetColorTexture(1, 1, 1, 0.07)
+    tabLine:SetHeight(1)
+    tabLine:SetPoint("TOPLEFT",  frame, "TOPLEFT",  0, -46)
+    tabLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -46)
+
+    -- --------------------------------------------------------
+    -- Conteneurs d'onglets
+    -- --------------------------------------------------------
+    local mainContent = CreateFrame("Frame", nil, frame)
+    mainContent:SetPoint("TOPLEFT",     frame, "TOPLEFT",     SECTION_PAD, -50)
+    mainContent:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SECTION_PAD, SECTION_PAD)
+    self.mainContent = mainContent
+
+    local histContent = CreateFrame("Frame", nil, frame)
+    histContent:SetPoint("TOPLEFT",     frame, "TOPLEFT",     SECTION_PAD, -50)
+    histContent:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SECTION_PAD, SECTION_PAD)
+    histContent:Hide()
+    self.histContent = histContent
+
+    -- --------------------------------------------------------
+    -- Section ORACLE (dans mainContent)
+    -- --------------------------------------------------------
+    local oracleSection = CreateFrame("Frame", nil, mainContent)
+    oracleSection:SetPoint("TOPLEFT",  mainContent, "TOPLEFT",  0, 0)
+    oracleSection:SetPoint("TOPRIGHT", mainContent, "TOPRIGHT", 0, 0)
     oracleSection:SetHeight(90)
     self.oracleSection = oracleSection
 
@@ -191,16 +243,16 @@ function MainPanel:Create()
     -- --------------------------------------------------------
     -- Séparateur
     -- --------------------------------------------------------
-    local sep1 = frame:CreateTexture(nil, "BORDER")
+    local sep1 = mainContent:CreateTexture(nil, "BORDER")
     sep1:SetColorTexture(1, 1, 1, 0.07)
     sep1:SetHeight(1)
     sep1:SetPoint("TOPLEFT",  oracleSection, "BOTTOMLEFT",  0, -6)
     sep1:SetPoint("TOPRIGHT", oracleSection, "BOTTOMRIGHT", 0, -6)
 
     -- --------------------------------------------------------
-    -- Section SESSION
+    -- Section SESSION (dans mainContent)
     -- --------------------------------------------------------
-    local sessionSection = CreateFrame("Frame", nil, frame)
+    local sessionSection = CreateFrame("Frame", nil, mainContent)
     sessionSection:SetPoint("TOPLEFT",  oracleSection, "BOTTOMLEFT",  0, -14)
     sessionSection:SetPoint("TOPRIGHT", oracleSection, "BOTTOMRIGHT", 0, -14)
     sessionSection:SetHeight(80)
@@ -242,20 +294,11 @@ function MainPanel:Create()
     self.stopBtn = stopBtn
 
     -- --------------------------------------------------------
-    -- Séparateur
+    -- Section HISTORIQUE (dans histContent)
     -- --------------------------------------------------------
-    local sep2 = frame:CreateTexture(nil, "BORDER")
-    sep2:SetColorTexture(1, 1, 1, 0.07)
-    sep2:SetHeight(1)
-    sep2:SetPoint("TOPLEFT",  sessionSection, "BOTTOMLEFT",  0, -6)
-    sep2:SetPoint("TOPRIGHT", sessionSection, "BOTTOMRIGHT", 0, -6)
-
-    -- --------------------------------------------------------
-    -- Section HISTORIQUE
-    -- --------------------------------------------------------
-    local histSection = CreateFrame("Frame", nil, frame)
-    histSection:SetPoint("TOPLEFT",  sessionSection, "BOTTOMLEFT",  0, -14)
-    histSection:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SECTION_PAD, SECTION_PAD)
+    local histSection = CreateFrame("Frame", nil, histContent)
+    histSection:SetPoint("TOPLEFT",     histContent, "TOPLEFT",     0, 0)
+    histSection:SetPoint("BOTTOMRIGHT", histContent, "BOTTOMRIGHT", 0, 0)
     self.histSection = histSection
 
     local histHeader = Label(histSection, L.HISTORY_TITLE,
@@ -278,6 +321,16 @@ function MainPanel:Create()
     self.avgLabel = avgLabel
 
     -- --------------------------------------------------------
+    -- Initialisation des onglets
+    -- --------------------------------------------------------
+    self.activeTab = 1
+    self.activeTabBtn = tab1Btn
+    tab1Btn.label:SetTextColor(1, 1, 1, 0.90)
+    tab1Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0.70)
+    tab1Btn:SetScript("OnClick", function() MainPanel:SwitchTab(1) end)
+    tab2Btn:SetScript("OnClick", function() MainPanel:SwitchTab(2) end)
+
+    -- --------------------------------------------------------
     -- Timer de mise à jour
     -- --------------------------------------------------------
     local elapsed = 0
@@ -285,7 +338,9 @@ function MainPanel:Create()
         elapsed = elapsed + dt
         if elapsed < UPDATE_RATE then return end
         elapsed = 0
-        MainPanel:RefreshSession()
+        if MainPanel.activeTab ~= 2 then
+            MainPanel:RefreshSession()
+        end
     end)
 
     self:Refresh()
@@ -296,9 +351,39 @@ end
 -- Refresh complet
 -- ============================================================
 function MainPanel:Refresh()
-    self:RefreshOracle()
-    self:RefreshSession()
-    self:RefreshHistory()
+    if self.activeTab == 2 then
+        self:RefreshHistory()
+    else
+        self:RefreshOracle()
+        self:RefreshSession()
+    end
+end
+
+-- ============================================================
+-- Commutation d'onglet
+-- ============================================================
+function MainPanel:SwitchTab(n)
+    self.activeTab = n
+    if n == 1 then
+        self.mainContent:Show()
+        self.histContent:Hide()
+        self.activeTabBtn = self.tab1Btn
+        self.tab1Btn.label:SetTextColor(1, 1, 1, 0.90)
+        self.tab1Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0.70)
+        self.tab2Btn.label:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+        self.tab2Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0)
+        self:RefreshOracle()
+        self:RefreshSession()
+    else
+        self.mainContent:Hide()
+        self.histContent:Show()
+        self.activeTabBtn = self.tab2Btn
+        self.tab1Btn.label:SetTextColor(COLOR_DIM[1], COLOR_DIM[2], COLOR_DIM[3])
+        self.tab1Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0)
+        self.tab2Btn.label:SetTextColor(1, 1, 1, 0.90)
+        self.tab2Btn.indicator:SetVertexColor(0.56, 0.85, 0.72, 0.70)
+        self:RefreshHistory()
+    end
 end
 
 -- ============================================================
@@ -310,7 +395,7 @@ function MainPanel:RefreshOracle()
 
     if oracle.recommendedZone then
         local zoneName = ORA().ZONE_NAMES[oracle.recommendedZone] or "?"
-        self.recoZone:SetText("→ " .. zoneName)
+        self.recoZone:SetText(zoneName)
         self.recoZone:SetTextColor(COLOR_HERB[1], COLOR_HERB[2], COLOR_HERB[3])
 
         local scoreParts = {}

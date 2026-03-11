@@ -127,6 +127,13 @@ end
 -- Mode "en attente" — démarre quand on arrive dans la bonne zone
 -- ============================================================
 function Session:WaitForZone(mapID)
+    -- Si le joueur est déjà dans la zone cible, démarrer immédiatement
+    local currentMapID = C_Map.GetBestMapForUnit("player")
+    if currentMapID == mapID then
+        local zoneName = Oracle.ZONE_NAMES[mapID]
+        self:Start(mapID, zoneName)
+        return
+    end
     state.waitingForMapID = mapID
     local zoneName = Oracle.ZONE_NAMES[mapID] or tostring(mapID)
     Meridian:Msg(string.format(L.SESSION_WAITING, zoneName))

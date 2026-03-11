@@ -41,6 +41,10 @@ local L = {
     HISTORY_TITLE = "Last sessions:",
     HISTORY_AVG   = "Avg: %s/h",
 
+    -- Tabs
+    TAB_ORACLE_SESSION = "Oracle \194\183 Session",
+    TAB_HISTORY        = "History",
+
     -- Minimap
     TOOLTIP_HINT    = "|cffFFFFFFLeft-Click|r open | |cffFFFFFFRight-Click|r pause session",
     TOOLTIP_WAITING = "Waiting for: %s",

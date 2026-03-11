@@ -42,6 +42,10 @@ L.SESSION_PAUSED_SHORT  = "en pause"
 L.HISTORY_TITLE = "Derni\195\168res sessions :"
 L.HISTORY_AVG   = "Moy. : %s/h"
 
+-- Tabs
+L.TAB_ORACLE_SESSION = "Oracle \194\183 Session"
+L.TAB_HISTORY        = "Historique"
+
 -- Minimap
 L.TOOLTIP_HINT    = "|cffFFFFFFClic gauche|r ouvrir | |cffFFFFFFClic droit|r pause session"
 L.TOOLTIP_WAITING = "En attente : %s"

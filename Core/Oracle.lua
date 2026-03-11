@@ -1,7 +1,6 @@
-﻿-- ============================================================
--- Meridian â€” Oracle Module (100% Native)
--- Calcul du score de rentabilitÃ© par zone via Auctionator
--- Zones retenues : BCE (2395) et TdV (2405)
+-- ============================================================
+-- Meridian -- Oracle Module (100% Native)
+-- Calcul du score de rentabilite par zone via Auctionator
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
@@ -18,18 +17,17 @@ local math_floor = math.floor
 local time       = time
 local date       = date
 
--- Noms des zones affichÃ©s (court)
+-- Noms des zones -- initialises via C_Map.GetMapInfo au INIT
+-- Fallback : bytes UTF-8 echappes (e = \195\169, e-circ = \195\170)
 local ZONE_NAMES = {
-    [2395] = "Bois des Chants Ã©ternels",
-    [2405] = "TempÃªte du Vide",
+    [2395] = "Bois des Chants \195\169ternels",
+    [2405] = "Temp\195\170te du Vide",
 }
 Oracle.ZONE_NAMES = ZONE_NAMES
 
 -- ============================================================
--- Lecture prix Auctionator (dÃ©pendance optionnelle)
+-- Lecture prix Auctionator (dependance optionnelle)
 -- ============================================================
-
--- Retourne le prix en cuivres, ou nil si inconnu / Auctionator absent
 local function GetAuctionatorPrice(itemID)
     if Auctionator and Auctionator.API and Auctionator.API.v1
        and Auctionator.API.v1.GetAuctionPriceByItemID then
@@ -38,18 +36,14 @@ local function GetAuctionatorPrice(itemID)
     return nil
 end
 
--- Retourne true si Auctionator est disponible
 function Oracle:IsAuctionatorAvailable()
     return Auctionator and Auctionator.API and Auctionator.API.v1 ~= nil
 end
 
 -- ============================================================
 -- Calcul du score par zone
+-- Retourne tableau trie : { { mapID, zoneName, score, itemsScored } }
 -- ============================================================
-
--- Retourne un tableau de rÃ©sultats triÃ©s, du plus rentable au moins rentable :
--- { { mapID, zoneName, score, missingPrices, itemsScored } }
--- score est en cuivres
 function Oracle:Calculate()
     local results = {}
 
@@ -57,31 +51,25 @@ function Oracle:Calculate()
         local profile     = DB():GetZoneProfile(mapID)
         local score       = 0
         local itemsScored = 0
-        local missing     = {}
 
         for itemID, count in pairs(profile) do
             local price = GetAuctionatorPrice(itemID)
             if price and price > 0 then
                 score = score + price * count
                 itemsScored = itemsScored + 1
-            else
-                missing[#missing + 1] = itemID
             end
         end
 
         results[#results + 1] = {
-            mapID         = mapID,
-            zoneName      = zoneName,
-            score         = score,
-            itemsScored   = itemsScored,
-            missingPrices = missing,
+            mapID       = mapID,
+            zoneName    = zoneName,
+            score       = score,
+            itemsScored = itemsScored,
         }
     end
 
-    -- Trier du plus rentable au moins rentable
     table.sort(results, function(a, b) return a.score > b.score end)
 
-    -- Sauvegarder et retourner
     local scores = {}
     for _, r in pairs(results) do
         scores[r.mapID] = r.score
@@ -94,10 +82,8 @@ function Oracle:Calculate()
 end
 
 -- ============================================================
--- Formatage de l'Ã¢ge des prix pour l'affichage
+-- Label date des prix
 -- ============================================================
-
--- Retourne une chaÃ®ne lisible : "Prix du 11/03" ou "Prix non disponibles"
 function Oracle:GetPriceDateLabel()
     local oracle = DB():GetOracleResult()
     if not oracle.priceDate then
@@ -107,7 +93,7 @@ function Oracle:GetPriceDateLabel()
 end
 
 -- ============================================================
--- Formatage or pour affichage (cuivres â†’ "X 987g 65a 43c")
+-- Formatage or : cuivres -> "Xg Ys Zc" colore
 -- ============================================================
 function Oracle:FormatGold(copper)
     if not copper or copper == 0 then return "0g" end
@@ -124,8 +110,13 @@ function Oracle:FormatGold(copper)
 end
 
 -- ============================================================
--- Init
+-- Init : mise a jour des noms de zone depuis l'API WoW (locale native)
 -- ============================================================
 Meridian:RegisterCallback("INIT", function()
-    -- Rien Ã  initialiser â€” Oracle calcule Ã  la demande
+    for mapID in pairs(ZONE_NAMES) do
+        local info = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+        if info and info.name and info.name ~= "" then
+            ZONE_NAMES[mapID] = info.name
+        end
+    end
 end)

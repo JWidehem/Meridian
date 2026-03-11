@@ -12,23 +12,23 @@ local L = {
     -- Oracle
     ORACLE_CALCULATE      = "Analyse",
     ORACLE_RECALCULATE    = "Re-analyse",
-    ORACLE_CHOOSE_OTHER   = "Other zone",
+    ORACLE_CHOOSE_OTHER   = "Choose other zone",
     ORACLE_NO_AUCTIONATOR = "Auctionator required",
     ORACLE_NOT_CALCULATED = "Not analysed yet",
-    ORACLE_NO_PRICES      = "No prices available",
+    ORACLE_NO_PRICES      = "No price data",
     ORACLE_PRICE_DATE     = "Prices from %s",
     ORACLE_NO_DATA        = "No data to calculate.",
 
     -- Session
-    SESSION_STARTED       = "Tracking started: %s",
+    SESSION_STARTED       = "Tracking: %s",
     SESSION_WAITING       = "Waiting for zone: %s",
     SESSION_WAITING_SHORT = "Waiting: %s",
     SESSION_NONE          = "No active zone",
 
-    -- Totals
-    LABEL_HERB  = "\230\152\191 Herbs",
-    LABEL_ORE   = "\226\155\143 Ore",
-    RESET_VISUAL = "Reset view",
+    -- Farm totals
+    LABEL_HERB  = "Herbs",
+    LABEL_ORE   = "Ore",
+    RESET_VISUAL = "Reset",
 
     -- Minimap tooltip
     TOOLTIP_HINT    = "|cffFFFFFFLeft-click|r open  |cffFFFFFFRight-click|r stop",

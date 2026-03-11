@@ -201,4 +201,3 @@ end
 function Database:GetSessionCount()
     return #self.db.sessions
 end
-end

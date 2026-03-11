@@ -112,8 +112,9 @@ function MinimapIcon:Create()
     -- Clicks
     button:SetScript("OnClick", function(self, btn)
         if btn == "RightButton" then
-            if Session and Session:IsActive() then
-                Session:TogglePause()
+            local ses = ns.Session
+            if ses and ses:IsActive() then
+                ses:TogglePause()
             end
         else
             if ns.MainPanel then

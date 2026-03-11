@@ -4,10 +4,12 @@
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
-local Database = ns.Database
-local Oracle   = ns.Oracle
-local Session  = ns.Session
 local L = ns.L
+
+-- Résolution différée via ns — les modules sont enregistrés après le chargement
+local function DB()      return ns.Database end
+local function ORA()     return ns.Oracle   end
+local function SES()     return ns.Session  end
 
 local MainPanel = {}
 ns.MainPanel = MainPanel
@@ -91,7 +93,7 @@ end
 -- Formatage or (cuivres → lisible)
 -- ============================================================
 local function FormatGold(copper)
-    return Oracle:FormatGold(copper)
+    return ORA():FormatGold(copper)
 end
 
 -- Durée (secondes) → "Xh Ym" ou "Ym Zs"
@@ -227,14 +229,14 @@ function MainPanel:Create()
     -- Bouton Pause/Reprendre
     local pauseBtn = GlimmerButton(sessionSection, L.SESSION_PAUSE, 120, 22)
     pauseBtn:SetPoint("BOTTOMLEFT", sessionSection, "BOTTOMLEFT", 0, 0)
-    pauseBtn:SetScript("OnClick", function() Session:TogglePause() end)
+    pauseBtn:SetScript("OnClick", function() SES():TogglePause() end)
     self.pauseBtn = pauseBtn
 
     -- Bouton Stop
     local stopBtn = GlimmerButton(sessionSection, L.SESSION_STOP, 90, 22)
     stopBtn:SetPoint("BOTTOMRIGHT", sessionSection, "BOTTOMRIGHT", 0, 0)
     stopBtn:SetScript("OnClick", function()
-        Session:Stop()
+        SES():Stop()
         MainPanel:Refresh()
     end)
     self.stopBtn = stopBtn
@@ -303,18 +305,17 @@ end
 -- Refresh section Oracle
 -- ============================================================
 function MainPanel:RefreshOracle()
-    local oracle = Database:GetOracleResult()
-    local isAvailable = Oracle:IsAuctionatorAvailable()
+    local oracle = DB():GetOracleResult()
+    local isAvailable = ORA():IsAuctionatorAvailable()
 
     if oracle.recommendedZone then
-        local zoneName = Oracle.ZONE_NAMES[oracle.recommendedZone] or "?"
+        local zoneName = ORA().ZONE_NAMES[oracle.recommendedZone] or "?"
         self.recoZone:SetText("→ " .. zoneName)
         self.recoZone:SetTextColor(COLOR_HERB[1], COLOR_HERB[2], COLOR_HERB[3])
 
-        -- Scores des deux zones
         local scoreParts = {}
         for mapID, score in pairs(oracle.scores) do
-            local name = (Oracle.ZONE_NAMES[mapID] or "?"):match("^(.-)%s") or "?"
+            local name = (ORA().ZONE_NAMES[mapID] or "?"):match("^(.-)%s") or "?"
             scoreParts[#scoreParts + 1] = name .. " " .. FormatGold(score)
         end
         self.recoScore:SetText(table.concat(scoreParts, "  |  "))
@@ -328,11 +329,10 @@ function MainPanel:RefreshOracle()
         self.recoScore:SetText("")
     end
 
-    self.priceDate:SetText(Oracle:GetPriceDateLabel())
+    self.priceDate:SetText(ORA():GetPriceDateLabel())
     self.calcBtn.label:SetText(oracle.priceDate and L.ORACLE_RECALCULATE or L.ORACLE_CALCULATE)
 
-    -- Bouton "autre zone" visible seulement si une reco existe et session non démarrée
-    local showAlt = oracle.recommendedZone ~= nil and not Session:IsActive()
+    local showAlt = oracle.recommendedZone ~= nil and not SES():IsActive()
     self.altBtn:SetShown(showAlt)
 end
 
@@ -340,12 +340,12 @@ end
 -- Refresh section Session
 -- ============================================================
 function MainPanel:RefreshSession()
-    local isActive  = Session:IsActive()
-    local isPaused  = Session:IsPaused()
-    local isWaiting = Session:IsWaiting()
+    local isActive  = SES():IsActive()
+    local isPaused  = SES():IsPaused()
+    local isWaiting = SES():IsWaiting()
 
     if isWaiting then
-        local waitZone = Oracle.ZONE_NAMES[Session:GetWaitingZone()] or "?"
+        local waitZone = ORA().ZONE_NAMES[SES():GetWaitingZone()] or "?"
         self.sessionHeader:SetText(format(L.SESSION_WAITING_SHORT, waitZone))
         self.timerLabel:SetText("—")
         self.gphLabel:SetText("")
@@ -365,19 +365,18 @@ function MainPanel:RefreshSession()
         return
     end
 
-    -- Session active
-    local elapsed  = Session:GetElapsed()
-    local gph      = Session:GetGoldPerHour()
-    local goldHerb = Session.state.goldHerb
-    local goldOre  = Session.state.goldOre
-    local zoneName = Session.state.zoneName
+    local elapsed  = SES():GetElapsed()
+    local gph      = SES():GetGoldPerHour()
+    local goldHerb = SES().state.goldHerb
+    local goldOre  = SES().state.goldOre
+    local zoneName = SES().state.zoneName
 
     self.sessionHeader:SetText(format(L.SESSION_IN_ZONE, zoneName))
     self.timerLabel:SetText(FormatDuration(elapsed) .. (isPaused and " (" .. L.SESSION_PAUSED_SHORT .. ")" or ""))
     self.gphLabel:SetText(FormatGold(gph) .. "/h")
     self.breakdownLabel:SetText(
         "|cff" .. string.format("%02x%02x%02x", COLOR_HERB[1]*255, COLOR_HERB[2]*255, COLOR_HERB[3]*255)
-        .. "🌿|r " .. FormatGold(goldHerb)
+        .. "☕|r " .. FormatGold(goldHerb)
         .. "  |cff" .. string.format("%02x%02x%02x", COLOR_ORE[1]*255, COLOR_ORE[2]*255, COLOR_ORE[3]*255)
         .. "⛏|r " .. FormatGold(goldOre)
     )
@@ -391,20 +390,16 @@ end
 -- Refresh section Historique
 -- ============================================================
 function MainPanel:RefreshHistory()
-    local sessions = Database:GetRecentSessions(5)
-    local avg      = Database:GetAverageGoldPerHour(5)
+    local sessions = DB():GetRecentSessions(5)
+    local avg      = DB():GetAverageGoldPerHour(5)
 
-    -- Noms courts
-    local SHORT = {
-        [2395] = "BCE",
-        [2405] = "TdV",
-    }
+    local SHORT = { [2395] = "BCE", [2405] = "TdV" }
 
     for i = 1, 5 do
         local s = sessions[i]
         if s then
             local shortName = SHORT[s.mapID] or s.zoneName:sub(1, 3)
-            local line = format("%s · %s · 🌿%s ⛏%s",
+            local line = format("%s · %s · ☕%s ⛏%s",
                 shortName,
                 FormatDuration(s.duration),
                 FormatGold(s.goldHerb),
@@ -429,30 +424,27 @@ end
 -- Actions boutons
 -- ============================================================
 function MainPanel:OnCalcClick()
-    if not Oracle:IsAuctionatorAvailable() then
+    if not ORA():IsAuctionatorAvailable() then
         Meridian:Msg(L.ORACLE_NO_AUCTIONATOR)
         return
     end
-    local results = Oracle:Calculate()
+    local results = ORA():Calculate()
     if not results or #results == 0 then
         Meridian:Msg(L.ORACLE_NO_DATA)
         return
     end
     self:RefreshOracle()
-    -- Passer en mode attente pour la zone recommandée
     local recommended = results[1].mapID
-    Session:WaitForZone(recommended)
+    SES():WaitForZone(recommended)
     self:RefreshSession()
 end
 
--- L'utilisateur choisit l'autre zone (la moins bien recommandée)
 function MainPanel:OnAltZoneClick()
-    local oracle = Database:GetOracleResult()
+    local oracle = DB():GetOracleResult()
     if not oracle.recommendedZone then return end
 
-    -- Trouver l'autre mapID
     local altMapID
-    for mapID in pairs(Oracle.ZONE_NAMES) do
+    for mapID in pairs(ORA().ZONE_NAMES) do
         if mapID ~= oracle.recommendedZone then
             altMapID = mapID
             break
@@ -460,7 +452,7 @@ function MainPanel:OnAltZoneClick()
     end
     if not altMapID then return end
 
-    Session:WaitForZone(altMapID)
+    SES():WaitForZone(altMapID)
     self:RefreshSession()
 end
 

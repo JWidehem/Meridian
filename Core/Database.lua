@@ -1,22 +1,20 @@
--- ============================================================
--- Meridian — Database Module (100% Native)
--- Stockage des nodes, ressources connues, statistiques
+﻿-- ============================================================
+-- Meridian â€” Database Module (100% Native)
+-- ZoneProfile (densitÃ© figÃ©e Phase 1), sessions historique, cache oracle
 -- ============================================================
 local addonName, ns = ...
 local Meridian = ns.addon
-local L = ns.L
 
 local Database = {}
 ns.Database = Database
 
--- Cache
 local pairs = pairs
 local ipairs = ipairs
-local time = time
-local math_abs = math.abs
+local time   = time
 local format = string.format
+local math_floor = math.floor
 
--- Palette de couleurs — Glimmer (désaturée, pastels lisibles sur fond sombre)
+-- Palette de couleurs Glimmer (dÃ©saturÃ©e, pastels lisibles sur fond sombre)
 local COLOR_PALETTE = {
     { 0.25, 0.78, 0.55 }, -- mint green
     { 0.88, 0.62, 0.28 }, -- warm amber
@@ -29,292 +27,178 @@ local COLOR_PALETTE = {
 }
 Database.COLOR_PALETTE = COLOR_PALETTE
 
--- Dedup
-local DEDUP_DISTANCE = 0.5
-local DEDUP_TIME = 15
+-- Zones de farming retenues
+Database.FARM_ZONES = {
+    [2395] = "Bois des Chants Ã©ternels",
+    [2405] = "TempÃªte du Vide",
+}
+
+-- Nombre max de sessions conservÃ©es
+local MAX_SESSIONS = 30
 
 -- ============================================================
--- Init (called via callback after ADDON_LOADED)
+-- Defaults SavedVariables
+-- ============================================================
+local defaults = {
+    minimap = {
+        hide  = false,
+        angle = 220,
+    },
+    -- Profil de densitÃ© par zone â€” nÅ“uds rÃ©coltÃ©s Phase 1, figÃ©s
+    -- [mapID] = { [itemID] = count, ... }
+    zoneProfile = {
+        [2395] = {
+            [236761]=75,  -- Tranquillette T1
+            [236767]=4,   -- Tranquillette T2
+            [236770]=25,  -- Sanguironce T1
+            [236774]=11,  -- Azeracine T1
+            [236775]=2,   -- Azeracine T2
+            [236776]=13,  -- Feuille-d'argent T1
+            [236777]=3,   -- Feuille-d'argent T2
+            [236778]=22,  -- Lys de mana T1
+            [236780]=1,   -- Lotus nocturne
+            [236949]=4,   -- Particule de LumiÃ¨re
+            [237359]=70,  -- Cuivre Ã©clatant T1
+            [237361]=4,   -- Cuivre Ã©clatant T2
+            [237362]=14,  -- Ã‰tain ombreux T1
+            [237364]=42,  -- Argent brillant T1
+            [237365]=1,   -- Argent brillant T2
+            [237366]=1,   -- Thorium Ã©blouissant
+        },
+        [2405] = {
+            [236761]=86,  -- Tranquillette T1
+            [236767]=6,   -- Tranquillette T2
+            [236770]=27,  -- Sanguironce T1
+            [236771]=3,   -- Sanguironce T2
+            [236774]=8,   -- Azeracine T1
+            [236775]=1,   -- Azeracine T2
+            [236776]=12,  -- Feuille-d'argent T1
+            [236777]=2,   -- Feuille-d'argent T2
+            [236778]=8,   -- Lys de mana T1
+            [236779]=1,   -- Lys de mana T2
+            [236780]=2,   -- Lotus nocturne
+            [236952]=4,   -- Particule de Vide pur
+            [237359]=37,  -- Cuivre Ã©clatant T1
+            [237361]=12,  -- Cuivre Ã©clatant T2
+            [237362]=26,  -- Ã‰tain ombreux T1
+            [237363]=7,   -- Ã‰tain ombreux T2
+            [237364]=17,  -- Argent brillant T1
+            [237365]=4,   -- Argent brillant T2
+        },
+    },
+    -- Cache du dernier calcul Oracle
+    oracle = {
+        recommendedZone = nil,
+        scores          = {},
+        priceDate       = nil,
+    },
+    -- Historique des sessions terminÃ©es
+    sessions = {},
+}
+Database.defaults = defaults
+
+-- ============================================================
+-- Init
 -- ============================================================
 Meridian:RegisterCallback("INIT", function()
     Database.db = Meridian.db
 end)
 
 Meridian:RegisterCallback("RESET_ALL", function()
-    Database:ResetAll()
+    Database:ResetSessions()
+    Database:ResetOracle()
 end)
 
 -- ============================================================
--- Enregistrement d'un node
+-- ZoneProfile â€” lecture seule
 -- ============================================================
-function Database:RecordNode(data)
-    if not data or not data.itemID or not data.mapID then return end
-    if self:IsDuplicate(data) then return end
 
-    if not self.db.nodes[data.mapID] then
-        self.db.nodes[data.mapID] = {}
+-- Retourne { [itemID] = count } pour une zone, ou {} si inconnue
+function Database:GetZoneProfile(mapID)
+    return self.db.zoneProfile[mapID] or {}
+end
+
+-- ============================================================
+-- Oracle cache
+-- ============================================================
+function Database:SaveOracleResult(recommendedZone, scores, timestamp)
+    self.db.oracle.recommendedZone = recommendedZone
+    self.db.oracle.scores          = scores
+    self.db.oracle.priceDate       = timestamp or time()
+end
+
+function Database:GetOracleResult()
+    return self.db.oracle
+end
+
+function Database:ResetOracle()
+    self.db.oracle.recommendedZone = nil
+    self.db.oracle.scores          = {}
+    self.db.oracle.priceDate       = nil
+end
+
+-- ============================================================
+-- Sessions
+-- ============================================================
+
+-- Sauvegarde une session terminÃ©e
+-- data = { mapID, zoneName, duration (sec), goldHerb, goldOre }
+function Database:SaveSession(data)
+    local sessions = self.db.sessions
+    local goldTotal = (data.goldHerb or 0) + (data.goldOre or 0)
+    local goldPerHour = 0
+    if data.duration and data.duration > 0 then
+        goldPerHour = math_floor(goldTotal / data.duration * 3600)
     end
 
-    local node = {
-        itemID       = data.itemID,
-        itemName     = data.itemName,
-        resourceType = data.resourceType,
-        mapID        = data.mapID,
-        zoneName     = data.zoneName,
-        subZone      = data.subZone or "",
-        x            = data.x,
-        y            = data.y,
-        timestamp    = data.timestamp or time(),
+    local entry = {
+        zoneName    = data.zoneName or "",
+        mapID       = data.mapID,
+        date        = date("%Y-%m-%d"),
+        duration    = data.duration or 0,
+        goldHerb    = data.goldHerb or 0,
+        goldOre     = data.goldOre or 0,
+        goldTotal   = goldTotal,
+        goldPerHour = goldPerHour,
     }
 
-    local zoneNodes = self.db.nodes[data.mapID]
-    zoneNodes[#zoneNodes + 1] = node
+    sessions[#sessions + 1] = entry
 
-    local isNew = self:RegisterResource(data.itemID, data.itemName, data.resourceType)
-
-    Meridian:FireCallback("NODE_RECORDED", node, isNew)
-
-    return node, isNew
-end
-
--- ============================================================
--- Deduplication
--- ============================================================
-function Database:IsDuplicate(data)
-    local zoneNodes = self.db.nodes[data.mapID]
-    if not zoneNodes then return false end
-
-    local now = data.timestamp or time()
-
-    for i = #zoneNodes, 1, -1 do
-        local existing = zoneNodes[i]
-        if (now - existing.timestamp) > DEDUP_TIME then break end
-
-        if existing.itemID == data.itemID then
-            local dx = math_abs(existing.x - data.x)
-            local dy = math_abs(existing.y - data.y)
-            if dx < DEDUP_DISTANCE and dy < DEDUP_DISTANCE then
-                return true
-            end
-        end
+    -- Garde seulement les MAX_SESSIONS derniÃ¨res
+    while #sessions > MAX_SESSIONS do
+        table.remove(sessions, 1)
     end
 
-    return false
+    return entry
 end
 
--- ============================================================
--- Auto-decouverte des ressources
--- ============================================================
-function Database:RegisterResource(itemID, itemName, resourceType)
-    if self.db.knownResources[itemID] then
-        return false
-    end
-
-    local colorIndex = self.db.nextColorIndex
-    self.db.nextColorIndex = (colorIndex % #COLOR_PALETTE) + 1
-
-    self.db.knownResources[itemID] = {
-        type       = resourceType,
-        name       = itemName,
-        firstSeen  = time(),
-        colorIndex = colorIndex,
-    }
-
-    Meridian:FireCallback("RESOURCE_DISCOVERED", itemID, self.db.knownResources[itemID])
-    return true
-end
-
--- ============================================================
--- Requetes
--- ============================================================
-function Database:GetNodesByZone(mapID)
-    return self.db.nodes[mapID] or {}
-end
-
-function Database:GetResourceCount(itemID)
-    local count = 0
-    for _, zoneNodes in pairs(self.db.nodes) do
-        for _, node in ipairs(zoneNodes) do
-            if node.itemID == itemID then
-                count = count + 1
-            end
-        end
-    end
-    return count
-end
-
-function Database:GetTotalNodeCount()
-    local count = 0
-    for _, zoneNodes in pairs(self.db.nodes) do
-        count = count + #zoneNodes
-    end
-    return count
-end
-
-function Database:GetKnownResourcesByType(resourceType)
+-- Retourne les N derniÃ¨res sessions (du plus rÃ©cent au plus ancien)
+function Database:GetRecentSessions(n)
+    local sessions = self.db.sessions
     local result = {}
-    for itemID, info in pairs(self.db.knownResources) do
-        if info.type == resourceType then
-            result[#result + 1] = {
-                itemID     = itemID,
-                name       = info.name,
-                count      = self:GetResourceCount(itemID),
-                colorIndex = info.colorIndex,
-            }
-        end
+    local start = math.max(1, #sessions - (n or 5) + 1)
+    for i = #sessions, start, -1 do
+        result[#result + 1] = sessions[i]
     end
     return result
 end
 
--- Returns zones sorted by total node count desc.
--- Each zone: { mapID, zoneName, totalCount, resources = [{itemID,name,count,colorIndex}] }
--- Resources within each zone are sorted by count desc.
--- Uses C_Map.GetBestMapForUnit("player") to flag the current zone.
-function Database:GetZoneBreakdownByType(resourceType)
-    local zones = {}
-
-    for mapID, zoneNodes in pairs(self.db.nodes) do
-        local byItem   = {}
-        local total    = 0
-        local zoneName = ""
-
-        for _, node in ipairs(zoneNodes) do
-            if node.resourceType == resourceType then
-                local id = node.itemID
-                if not byItem[id] then
-                    local info = self.db.knownResources[id]
-                    byItem[id] = {
-                        itemID     = id,
-                        name       = node.itemName,
-                        count      = 0,
-                        colorIndex = info and info.colorIndex or 1,
-                    }
-                end
-                byItem[id].count = byItem[id].count + 1
-                total    = total + 1
-                zoneName = node.zoneName or zoneName
-            end
-        end
-
-        if total > 0 then
-            local resArray = {}
-            for _, r in pairs(byItem) do resArray[#resArray + 1] = r end
-            table.sort(resArray, function(a, b) return a.count > b.count end)
-
-            zones[#zones + 1] = {
-                mapID      = mapID,
-                zoneName   = zoneName,
-                totalCount = total,
-                resources  = resArray,
-            }
-        end
+-- Moyenne or/heure sur les N derniÃ¨res sessions
+function Database:GetAverageGoldPerHour(n)
+    local recent = self:GetRecentSessions(n or 5)
+    if #recent == 0 then return 0 end
+    local total = 0
+    for _, s in ipairs(recent) do
+        total = total + s.goldPerHour
     end
-
-    table.sort(zones, function(a, b) return a.totalCount > b.totalCount end)
-    return zones
+    return math_floor(total / #recent)
 end
 
--- Returns ores, herbs tables for a specific mapID, each sorted by count desc.
--- Each entry: { itemID, name, count, colorIndex }
-function Database:GetCurrentZoneResources(mapID)
-    local ores  = {}
-    local herbs = {}
-    local zoneNodes = self.db.nodes[mapID]
-    if not zoneNodes then return ores, herbs end
-
-    local byItem = {}
-    for _, node in ipairs(zoneNodes) do
-        local id = node.itemID
-        if not byItem[id] then
-            local info = self.db.knownResources[id]
-            byItem[id] = {
-                itemID     = id,
-                name       = node.itemName,
-                count      = 0,
-                colorIndex = info and info.colorIndex or 1,
-                resType    = node.resourceType,
-            }
-        end
-        byItem[id].count = byItem[id].count + 1
-    end
-
-    for _, r in pairs(byItem) do
-        if r.resType == "ORE" then
-            ores[#ores + 1] = r
-        else
-            herbs[#herbs + 1] = r
-        end
-    end
-    table.sort(ores,  function(a, b) return a.count > b.count end)
-    table.sort(herbs, function(a, b) return a.count > b.count end)
-    return ores, herbs
+function Database:ResetSessions()
+    self.db.sessions = {}
 end
 
-function Database:GetKnownResources()
-    return self.db.knownResources
+function Database:GetSessionCount()
+    return #self.db.sessions
 end
-
-function Database:GetResourceInfo(itemID)
-    return self.db.knownResources[itemID]
-end
-
-function Database:GetResourceColor(itemID)
-    local info = self.db.knownResources[itemID]
-    if info and info.colorIndex then
-        return COLOR_PALETTE[info.colorIndex] or COLOR_PALETTE[1]
-    end
-    return COLOR_PALETTE[1]
-end
-
-function Database:GetExportData(mapID)
-    local data = {}
-    local nodes
-
-    if mapID then
-        nodes = { [mapID] = self.db.nodes[mapID] or {} }
-    else
-        nodes = self.db.nodes
-    end
-
-    for zoneMapID, zoneNodes in pairs(nodes) do
-        if #zoneNodes > 0 then
-            local zoneName = zoneNodes[1].zoneName or tostring(zoneMapID)
-            local byResource = {}
-
-            for _, node in ipairs(zoneNodes) do
-                local key = tostring(node.itemID)
-                if not byResource[key] then
-                    byResource[key] = {
-                        name = node.itemName,
-                        type = node.resourceType,
-                        count = 0,
-                    }
-                end
-                byResource[key].count = byResource[key].count + 1
-            end
-
-            data[tostring(zoneMapID)] = {
-                zone_name = zoneName,
-                map_id = zoneMapID,
-                nodes = zoneNodes,
-                summary = {
-                    total_nodes = #zoneNodes,
-                    by_resource = byResource,
-                },
-            }
-        end
-    end
-
-    return data
-end
-
--- ============================================================
--- Reset
--- ============================================================
-function Database:ResetAll()
-    wipe(self.db.nodes)
-    wipe(self.db.knownResources)
-    wipe(self.db.learnedSpells)
-    self.db.nextColorIndex = 1
-    Meridian:FireCallback("DATA_RESET")
 end

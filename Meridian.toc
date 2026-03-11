@@ -1,12 +1,13 @@
 ## Interface: 120001
 ## Title: Meridian
 ## Title-frFR: Meridian
-## Notes: Lightweight gathering node tracker for farming route optimization.
-## Notes-frFR: Tracker léger de nœuds de récolte pour l'optimisation de routes de farming.
+## Notes: Farming oracle — zone recommendation and real-time gold/hour tracker.
+## Notes-frFR: Oracle de farming — recommandation de zone et tracker or/heure temps réel.
 ## Author: JWidehem
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\INV_Misc_Map_01
 ## SavedVariables: MeridianDB
+## OptionalDeps: Auctionator
 ## X-Website: https://github.com/JWidehem/Meridian
 ## X-Date: @project-date-iso@
 ## X-Revision: @project-abbreviated-hash@
@@ -18,9 +19,9 @@ locales\frFR.lua
 # Core
 Core\Meridian.lua
 Core\Database.lua
-Core\Tracker.lua
-Core\Export.lua
+Core\Oracle.lua
+Core\Session.lua
 
 # UI
 UI\MinimapIcon.lua
-UI\StatsPanel.lua
+UI\MainPanel.lua

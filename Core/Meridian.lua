@@ -37,24 +37,14 @@ function Meridian:FireCallback(event, ...)
 end
 
 -- ============================================================
--- Defaults for SavedVariables
+-- Defaults for SavedVariables (Phase 2 — clés minimales)
+-- Les vrais defaults sont définis dans Database.lua (Database.defaults)
 -- ============================================================
 local defaults = {
-    enabled = true,
-    tracking = {
-        trackHerbs = true,
-        trackOres = true,
-        chatMessages = true,
-    },
     minimap = {
-        hide = false,
+        hide  = false,
         angle = 220,
     },
-    -- Data
-    nodes = {},
-    knownResources = {},
-    learnedSpells = {},
-    nextColorIndex = 1,
 }
 
 -- Deep copy a table
@@ -87,10 +77,12 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         -- Init SavedVariables
+        -- On utilise les defaults de Database.lua qui contient zoneProfile + oracle + sessions
+        local db_defaults = ns.Database and ns.Database.defaults or defaults
         if not MeridianDB then
-            MeridianDB = DeepCopy(defaults)
+            MeridianDB = DeepCopy(db_defaults)
         else
-            MergeDefaults(MeridianDB, defaults)
+            MergeDefaults(MeridianDB, db_defaults)
         end
         Meridian.db = MeridianDB
 
@@ -116,8 +108,15 @@ SlashCmdList["MERIDIAN"] = function(input)
     if cmd == "" then
         Meridian:FireCallback("TOGGLE_PANEL")
 
-    elseif cmd == "export" then
-        Meridian:FireCallback("EXPORT_ALL")
+    elseif cmd == "session" then
+        local Session = ns.Session
+        if Session then
+            if Session:IsActive() then
+                Session:Stop()
+            else
+                Meridian:Msg(L.CMD_SESSION_HINT)
+            end
+        end
 
     elseif cmd == "reset confirm" then
         Meridian:FireCallback("RESET_ALL")

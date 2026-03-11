@@ -86,19 +86,24 @@ function MinimapIcon:Create()
         GameTooltip:ClearLines()
         GameTooltip:AddLine("Meridian", 0.9, 0.8, 0.2)
 
-        local Database = ns.Database
-        if Database then
-            local totalNodes = Database:GetTotalNodeCount()
-            local ores = Database:GetKnownResourcesByType("ORE")
-            local herbs = Database:GetKnownResourcesByType("HERB")
-            GameTooltip:AddLine(string.format(L.TOOLTIP_NODES, totalNodes), 1, 1, 1)
-            GameTooltip:AddLine(string.format(L.TOOLTIP_RESOURCES, #ores, #herbs), 0.7, 0.7, 0.7)
+        local Session = ns.Session
+        if Session and Session:IsActive() then
+            local Oracle = ns.Oracle
+            local gph = Session:GetGoldPerHour()
+            GameTooltip:AddLine(Oracle:FormatGold(gph) .. "/h", 1, 1, 1)
+            GameTooltip:AddLine(Session.state.zoneName, 0.7, 0.7, 0.7)
+        elseif Session and Session:IsWaiting() then
+            local Oracle = ns.Oracle
+            local waitZone = Oracle.ZONE_NAMES[Session:GetWaitingZone()] or "?"
+            GameTooltip:AddLine(string.format(L.TOOLTIP_WAITING, waitZone), 0.7, 0.7, 0.7)
+        else
+            local oracle = ns.Database and ns.Database:GetOracleResult()
+            if oracle and oracle.recommendedZone then
+                local zoneName = ns.Oracle.ZONE_NAMES[oracle.recommendedZone] or "?"
+                GameTooltip:AddLine("→ " .. zoneName, 0.56, 0.85, 0.72)
+            end
         end
 
-        local enabled = Meridian.db and Meridian.db.enabled
-        local status = enabled and ("|cff2ecc71" .. L.TRACKING_ON .. "|r")
-                                or ("|cffe74c3c" .. L.TRACKING_OFF .. "|r")
-        GameTooltip:AddLine(status)
         GameTooltip:AddLine(L.TOOLTIP_HINT, 0.5, 0.5, 0.5)
         GameTooltip:Show()
     end)
@@ -107,12 +112,12 @@ function MinimapIcon:Create()
     -- Clicks
     button:SetScript("OnClick", function(self, btn)
         if btn == "RightButton" then
-            Meridian.db.enabled = not Meridian.db.enabled
-            local state = Meridian.db.enabled and L.TRACKING_ON or L.TRACKING_OFF
-            Meridian:Msg(state)
+            if Session and Session:IsActive() then
+                Session:TogglePause()
+            end
         else
-            if ns.StatsPanel then
-                ns.StatsPanel:Toggle()
+            if ns.MainPanel then
+                ns.MainPanel:Toggle()
             end
         end
     end)

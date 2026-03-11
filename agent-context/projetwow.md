@@ -177,7 +177,7 @@ MeridianDB.prices = {
 }
 ```
 
-### État actuel (HEAD : `b3c7096`)
+### État Phase 1 (archivé)
 
 - ✅ Tracking automatique de tous les nœuds récoltés (herbes + minerais)
 - ✅ Base de données permanente (SavedVariables `MeridianDB`)
@@ -187,9 +187,97 @@ MeridianDB.prices = {
 - ✅ Deux onglets : Minerais / Herbes
 - ✅ Commandes slash : `/mer` (toggle), `/mer export`, `/mer reset`
 
-### Phase 2 — À définir
+---
 
-_(Tu m'expliqueras ici ce qu'on va faire ensuite.)_
+## 🔮 Phase 2 — Oracle + Session Tracker (en cours)
+
+### Contexte décisions
+
+- **Zones retenues :** Tempête du Vide (mapID 2405) et Bois des Chants éternels (mapID 2395) uniquement
+- **Harandar exclue** : zone désagréable à farmer, données inférieures sur tous les tableaux
+- **Zul'Aman exclue** : ressources spéciales font pop des mobs — trop chronophage
+- **Ancienne DB de nœuds** : compressée en `zoneProfile` (comptages par item uniquement, coordonnées supprimées)
+- **StatsPanel + Tracker + Export supprimés** — remplacés par le nouveau MainPanel
+
+### Fonctionnement Oracle
+
+1. Lit les prix Auctionator pour tous les items des 2 zones (`zoneProfile`)
+2. Calcule `score_zone = Σ (prix × nb_nœuds)` pour TdV et BCE
+3. Affiche la recommandation + âge des prix ("Prix du JJ/MM")
+4. L'utilisateur confirme ou choisit l'autre zone
+5. L'addon passe en mode "en attente" — surveille `ZONE_CHANGED_NEW_AREA`
+6. Dès l'arrivée dans la bonne zone, la session démarre automatiquement
+
+### Session Tracker (temps réel)
+
+- Lit les quantités exactes depuis `CHAT_MSG_LOOT` (ex: "7x [Tranquillette]")
+- Filtre strict : HERB et ORE uniquement — le reste est ignoré
+- Calcule or accumulé = Σ (quantité × prix AH) en temps réel
+- Affiche or/heure glissant + breakdown HERB vs ORE
+- Pause manuelle disponible
+- À l'arrêt : sauvegarde le résumé de session dans l'historique
+
+### Historique sessions (léger)
+
+```lua
+-- Par session — 6 valeurs, ~50 KB/an maximum
+{ zone="Tempête du Vide", date="2026-03-11",
+  duration=3420, goldHerb=12400, goldOre=9100, goldPerHour=22700 }
+```
+
+Affichage : 5 dernières sessions + moyenne glissante or/heure.
+
+### Gestion prix inconnu
+
+Si un item n'a pas de prix Auctionator : affiché avec `?`, non comptabilisé silencieusement.
+
+### Architecture fichiers Phase 2
+
+```
+Core/
+  Meridian.lua     ← init + slash commands (simplifié)
+  Database.lua     ← MeridianDB restructuré (zoneProfile + oracle + sessions)
+  Oracle.lua       ← scoring zone via Auctionator (NOUVEAU)
+  Session.lua      ← timer + loot tracking temps réel (NOUVEAU)
+UI/
+  MainPanel.lua    ← remplace StatsPanel — oracle + session + historique (NOUVEAU)
+  MinimapIcon.lua  ← tooltip mis à jour
+locales/
+  enUS.lua         ← nouvelles clés Phase 2
+  frFR.lua         ← nouvelles clés Phase 2
+
+SUPPRIMÉS : Core/Tracker.lua, Core/Export.lua, UI/StatsPanel.lua
+```
+
+### SavedVariables Phase 2
+
+```lua
+MeridianDB = {
+    minimap = { hide=false, angle=220 },
+
+    -- Profil de densité par zone (remplace nodes) — figé Phase 1
+    zoneProfile = {
+        [2395] = { [236761]=75, [236770]=25, [236778]=22, [237359]=74,
+                   [237364]=43, [237362]=14, [236776]=16, [236774]=11,
+                   [236767]=4,  [236777]=3,  [236780]=1,  [236949]=4,
+                   [237361]=4,  [237365]=1,  [237366]=1 },
+        [2405] = { [236761]=92, [236770]=30, [236778]=9,  [237359]=49,
+                   [237364]=21, [237362]=33, [236776]=14, [236774]=9,
+                   [236767]=6,  [236771]=3,  [236777]=2,  [236780]=2,
+                   [236952]=4,  [237361]=12, [237363]=7,  [237365]=4 },
+    },
+
+    -- Résultat Oracle (cache)
+    oracle = {
+        recommendedZone = nil,   -- mapID
+        scores = {},             -- [mapID] = score en cuivres
+        priceDate = nil,         -- timestamp du dernier calcul
+    },
+
+    -- Historique des sessions (max 30 entrées)
+    sessions = {},
+}
+```
 
 ---
 

@@ -23,7 +23,17 @@ L.SESSION_NONE          = "Aucune zone active"
 
 L.LABEL_HERB  = "Plantes"
 L.LABEL_ORE   = "Minerais"
+L.LABEL_TOTAL = "Total"
 L.RESET_VISUAL = "Reset"
+
+L.CHOOSE_ZONE_TITLE = "Choisir une zone"
+
+L.BTN_HISTORY    = "Historique"
+L.BTN_BACK       = "Retour"
+L.BTN_BACK_ORACLE = "Oracle"
+
+L.HISTORY_TITLE    = "Historique quotidien"
+L.HISTORY_COL_DATE = "Date"
 
 L.TOOLTIP_HINT    = "|cffFFFFFFClic gauche|r ouvrir  |cffFFFFFFClic droit|r stop"
 L.TOOLTIP_WAITING = "En attente : %s"

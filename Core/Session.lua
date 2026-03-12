@@ -20,8 +20,12 @@ local state = {
     mapID               = nil,     -- zone active
     zoneName            = "",
     waitingForMapID     = nil,     -- zone attendue apres choix Oracle
+    lootLog             = {},      -- { resType, itemName, qty, value, copper } lignes loots
 }
 Session.state = state
+
+-- Nombre max de lignes gardees en memoire pour le log
+local LOOT_LOG_MAX = 40
 
 -- Accesseur lazy pour eviter les problemes d'ordre de chargement
 local function DB()  return ns.Database end
@@ -40,6 +44,8 @@ function Session:Start(mapID, zoneName)
     state.mapID             = mapID
     state.zoneName          = zoneName or (ORA().ZONE_NAMES[mapID] or "?")
     state.waitingForMapID   = nil
+    -- On vide le log en debut de session pour repartir propre
+    state.lootLog = {}
 
     Meridian:FireCallback("SESSION_STARTED", mapID, state.zoneName)
     Meridian:Msg(string.format(L.SESSION_STARTED, state.zoneName))
@@ -156,7 +162,23 @@ function Session:OnLoot(msg)
     local value = price * qty
     DB():AddLoot(resType, value)
 
-    Meridian:FireCallback("SESSION_LOOT_ADDED", resType, value)
+    -- Recuperer le nom de l'item (peut etre nil si pas encore en cache)
+    local itemName = GetItemInfo(itemID)
+    itemName = itemName or ("Item "..itemID)
+
+    -- Ajouter au log (LIFO : insert en tete, supprime fin si trop long)
+    local entry = {
+        resType  = resType,
+        itemName = itemName,
+        qty      = qty,
+        value    = value,  -- cuivres totaux
+    }
+    table.insert(state.lootLog, 1, entry)
+    if #state.lootLog > LOOT_LOG_MAX then
+        table.remove(state.lootLog)
+    end
+
+    Meridian:FireCallback("SESSION_LOOT_ADDED", resType, value, entry)
 end
 
 function Session:OnZoneChanged()

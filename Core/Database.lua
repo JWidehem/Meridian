@@ -82,6 +82,9 @@ local defaults = {
         resetOffsetHerb  = 0,    -- offset reset visuel herbes
         resetOffsetOre   = 0,    -- offset reset visuel minerais
     },
+    -- Historique journalier : table ordonnee, max 30 jours
+    -- Chaque entree : { date="YYYY-MM-DD", goldHerb=N, goldOre=N }
+    history = {},
 }
 Database.defaults = defaults
 
@@ -133,12 +136,44 @@ function Database:CheckDayRollover()
     local t = self.db.today
     local currentDate = date("%Y-%m-%d")
     if t.date ~= currentDate then
+        -- Sauvegarder le jour ecoule dans l'historique (si non vide)
+        if t.date ~= "" and (t.goldHerb > 0 or t.goldOre > 0) then
+            self:SaveDaySnapshot(t.date, t.goldHerb, t.goldOre)
+        end
         t.date            = currentDate
         t.goldHerb        = 0
         t.goldOre         = 0
         t.resetOffsetHerb = 0
         t.resetOffsetOre  = 0
     end
+end
+
+-- Sauvegarde un snapshot journalier dans l'historique (max 30 jours)
+local HISTORY_MAX = 30
+function Database:SaveDaySnapshot(dateStr, goldHerb, goldOre)
+    local h = self.db.history
+    -- Eviter les doublons : mise a jour si la date existe deja
+    for _, entry in ipairs(h) do
+        if entry.date == dateStr then
+            entry.goldHerb = goldHerb
+            entry.goldOre  = goldOre
+            return
+        end
+    end
+    table.insert(h, 1, { date = dateStr, goldHerb = goldHerb, goldOre = goldOre })
+    while #h > HISTORY_MAX do
+        table.remove(h)
+    end
+end
+
+-- Retourne les N derniers jours (without today) : [{ date, goldHerb, goldOre }]
+function Database:GetHistory(n)
+    n = n or 7
+    local result = {}
+    for i = 1, math.min(n, #self.db.history) do
+        result[#result + 1] = self.db.history[i]
+    end
+    return result
 end
 
 -- Ajoute une valeur au cumul du jour

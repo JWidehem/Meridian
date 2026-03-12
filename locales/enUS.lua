@@ -28,7 +28,20 @@ local L = {
     -- Farm totals
     LABEL_HERB  = "Herbs",
     LABEL_ORE   = "Ore",
+    LABEL_TOTAL = "Total",
     RESET_VISUAL = "Reset",
+
+    -- Zone choice screen
+    CHOOSE_ZONE_TITLE = "Choose a zone",
+
+    -- Farming screen buttons
+    BTN_HISTORY    = "History",
+    BTN_BACK       = "Back",
+    BTN_BACK_ORACLE = "Oracle",
+
+    -- History screen
+    HISTORY_TITLE    = "Daily History",
+    HISTORY_COL_DATE = "Date",
 
     -- Minimap tooltip
     TOOLTIP_HINT    = "|cffFFFFFFLeft-click|r open  |cffFFFFFFRight-click|r stop",
